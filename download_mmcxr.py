@@ -5,6 +5,7 @@ import os
 
 import httpx
 from bs4 import BeautifulSoup
+from tqdm.asyncio import tqdm
 
 
 BASE_URL = "https://physionet.org/files/mimic-cxr-jpg/2.0.0/"
@@ -72,30 +73,32 @@ async def crawl_directory(
         return save_to
 
 
-async def download_image(client: httpx.AsyncClient, url: str):
+async def download_image(client: httpx.AsyncClient, url: str, sem: asyncio.Semaphore):
     """"""
-    try:
-        response = await client.get(url)
-        response.raise_for_status()
+    async with sem:
+        try:
+            response = await client.get(url)
+            response.raise_for_status()
 
-        file_path = DATA_PATH / url.replace(BASE_URL, "")
-        file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path = DATA_PATH / url.replace(BASE_URL, "")
+            file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with file_path.open("wb") as f:
-            f.write(response.content)
+            with file_path.open("wb") as f:
+                f.write(response.content)
 
-        print(f"Finished downloading {file_path}")
-    except Exception as e:
-        print(f"Failed to download {url}: {e}")
+            print(f"Finished downloading {file_path}")
+        except Exception as e:
+            print(f"Failed to download {url}: {e}")
 
 
 async def main():
     """main function"""
-    saved_urls = Path("urls.txt")
-    limits = httpx.Limits(max_connections=50)
+    SAVED_URLS = Path("urls.txt")
+    MAX_CONN = 50
+    limits = httpx.Limits(max_connections=MAX_CONN)
     img_urls = set()
 
-    if not saved_urls.exists():
+    if not SAVED_URLS.exists():
         start = time.time()
         async with httpx.AsyncClient(limits=limits, timeout=30.0) as client:
             img_urls = await crawl_directory(client, BASE_URL, save_to=img_urls)
@@ -107,18 +110,24 @@ async def main():
             for u in sorted(img_urls):
                 f.write(u + "\n")
     else:
-        with saved_urls.open("r") as f:
+        with SAVED_URLS.open("r") as f:
             img_urls = (line.strip() for line in f)
 
     return
+    semaphore = asyncio.Semaphore(MAX_CONN)
     start = time.time()
     async with httpx.AsyncClient(
         auth=(USERNAME, PASSWORD), headers=HEADERS, limits=limits, timeout=30.0
     ) as client:
         tasks = []
         for url in img_urls:
-            tasks.append(download_image(client, url))
-        await asyncio.gather(*tasks)
+            tasks.append(download_image(client, url, semaphore))
+        for f in tqdm(
+            asyncio.as_completed(tasks),
+            total=len(tasks),
+            desc="Downloading dataset",
+        ):
+            await f
 
 
 if __name__ == "__main__":
