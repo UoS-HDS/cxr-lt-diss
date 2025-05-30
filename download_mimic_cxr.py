@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from tqdm.asyncio import tqdm
 
 
-BASE_URL = "https://physionet.org/files/mimic-cxr-jpg/2.0.0/files/p10/"
+BASE_URL = "https://physionet.org/files/mimic-cxr-jpg/2.0.0/"
 DATA_PATH = Path(__file__).parent / "mimic-cxr-jpg/2.0.0/"
 USERNAME = os.getenv("USERNAME")
 PASSWORD = os.getenv("PASSWORD")
@@ -105,11 +105,15 @@ async def crawl_directory(
 async def download_image(client: httpx.AsyncClient, url: str):
     """Download a single image"""
     try:
-        response = await asyncio.wait_for(client.get(url), timeout=30.0)
-        response.raise_for_status()
-
         file_path = DATA_PATH / url.replace(BASE_URL, "")
-        file_path.parent.mkdir(parents=True, exist_ok=True)
+        if file_path.exists():
+            print(f"File {file_path} already exists")
+            return
+        else:
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        response = await asyncio.wait_for(client.get(url), timeout=60.0)
+        response.raise_for_status()
 
         with file_path.open("wb") as f:
             f.write(response.content)
@@ -159,13 +163,13 @@ async def main():
             img_urls = set(line.strip() for line in f if line.strip())
         print(f"Loaded {len(img_urls)} URLs from file")
 
-    # Early return to skip downloads (as in original script)
-    return
-
     print("\nStarting downloads...")
     start = time.time()
     async with httpx.AsyncClient(
-        auth=(USERNAME, PASSWORD), headers=HEADERS, timeout=30.0
+        auth=(USERNAME, PASSWORD),
+        headers=HEADERS,
+        timeout=30.0,
+        cookies=httpx.Cookies(),
     ) as client:
         tasks = []
         for url in img_urls:
