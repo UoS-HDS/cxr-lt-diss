@@ -10,7 +10,7 @@ from tqdm.asyncio import tqdm
 
 
 BASE_URL = "https://physionet.org/files/mimic-cxr-jpg/2.0.0/"
-DATA_PATH = Path(__file__).parent / "mimic-cxr-jpg/2.0.0/"
+DATA_PATH = Path(__file__).parent / "data/mimic-cxr-jpg/2.0.0/"
 USERNAME = os.getenv("USERNAME")
 PASSWORD = os.getenv("PASSWORD")
 if not USERNAME or not PASSWORD:
@@ -24,6 +24,9 @@ HEADERS = {
 }
 
 DATA_PATH.mkdir(parents=True, exist_ok=True)
+
+# Global counters for debugging
+download_stats = {"success": 0, "exists": 0, "failed": 0, "total_processed": 0}
 
 
 def is_file(url_text):
@@ -102,30 +105,83 @@ async def crawl_directory(
         await crawl_directory(client, subdir_url, save_to, depth + 1)
 
 
-async def download_image(client: httpx.AsyncClient, url: str):
-    """Download a single image"""
-    try:
-        file_path = DATA_PATH / url.replace(BASE_URL, "")
-        if file_path.exists():
-            print(f"File {file_path} already exists")
-            return
-        else:
+async def download_image(
+    client: httpx.AsyncClient, url: str, semaphore: asyncio.Semaphore
+):
+    """Download a single image with improved error handling and debugging"""
+    async with semaphore:  # Limit concurrent downloads
+        global download_stats
+        download_stats["total_processed"] += 1
+
+        try:
+            relative_path = url.replace(BASE_URL, "")
+            file_path = DATA_PATH / relative_path
+
+            # Check if file already exists
+            if file_path.exists() and file_path.stat().st_size > 0:
+                download_stats["exists"] += 1
+                if download_stats["total_processed"] % 500 == 0:
+                    print(
+                        f"[DEBUG] File {file_path} already exists (processed: {download_stats['total_processed']})"
+                    )
+                return
+
+            # Create parent directory
             file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        response = await asyncio.wait_for(client.get(url), timeout=60.0)
-        response.raise_for_status()
+            response = await asyncio.wait_for(
+                client.get(url, auth=(USERNAME, PASSWORD), follow_redirects=True),
+                timeout=60.0,
+            )
 
-        with file_path.open("wb") as f:
-            f.write(response.content)
+            if response.status_code == 401:
+                print(f"[AUTH ERROR] 401 Unauthorized for {url}")
+                download_stats["failed"] += 1
+                return
+            elif response.status_code == 404:
+                print(f"[NOT FOUND] 404 for {url}")
+                download_stats["failed"] += 1
+                return
 
-        print(f"Downloaded {file_path}")
-    except Exception as e:
-        print(f"Failed to download {url}: {e}")
+            response.raise_for_status()
+
+            # Check if we got actual content
+            if len(response.content) == 0:
+                print(f"[WARNING] Empty content for {url}")
+                download_stats["failed"] += 1
+                return
+
+            with file_path.open("wb") as f:
+                f.write(response.content)
+
+            download_stats["success"] += 1
+
+            if download_stats["total_processed"] % 50 == 0:
+                print(
+                    f"[PROGRESS] Processed: {download_stats['total_processed']}, "
+                    f"Success: {download_stats['success']}, "
+                    f"Exists: {download_stats['exists']}, "
+                    f"Failed: {download_stats['failed']}"
+                )
+                print(
+                    f"[LATEST] Downloaded {file_path} ({len(response.content)} bytes)"
+                )
+
+        except asyncio.TimeoutError:
+            print(f"[TIMEOUT] Download timeout for {url}")
+            download_stats["failed"] += 1
+        except httpx.HTTPStatusError as e:
+            print(f"[HTTP ERROR] {e.response.status_code} for {url}")
+            download_stats["failed"] += 1
+        except Exception as e:
+            print(f"[ERROR] Failed to download {url}: {type(e).__name__}: {e}")
+            download_stats["failed"] += 1
 
 
 async def main():
     """Main function"""
     SAVED_URLS = Path("urls.txt")
+    MAX_CONN = 20
     img_urls = set()
 
     if not SAVED_URLS.exists():
@@ -165,15 +221,18 @@ async def main():
 
     print("\nStarting downloads...")
     start = time.time()
+
+    # Create semaphore to limit concurrent downloads
+    semaphore = asyncio.Semaphore(MAX_CONN)
+
     async with httpx.AsyncClient(
-        auth=(USERNAME, PASSWORD),
         headers=HEADERS,
         timeout=30.0,
         cookies=httpx.Cookies(),
     ) as client:
         tasks = []
         for url in img_urls:
-            tasks.append(download_image(client, url))
+            tasks.append(download_image(client, url, semaphore))
 
         # Download with progress bar
         for f in tqdm(
@@ -183,7 +242,12 @@ async def main():
         ):
             await f
 
-    print(f"Downloads completed in {time.time() - start:.2f} seconds")
+    print(f"\nDownloads completed in {time.time() - start:.2f} seconds")
+    print(
+        f"Final stats - Success: {download_stats['success']}, "
+        f"Already existed: {download_stats['exists']}, "
+        f"Failed: {download_stats['failed']}"
+    )
 
 
 if __name__ == "__main__":
@@ -191,6 +255,11 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         print("\nScript interrupted by user")
+        print(
+            f"Stats at interruption - Success: {download_stats['success']}, "
+            f"Exists: {download_stats['exists']}, "
+            f"Failed: {download_stats['failed']}"
+        )
         os._exit(1)
     except Exception as e:
         print(f"Unexpected error: {e}")
