@@ -106,75 +106,91 @@ async def crawl_directory(
 
 
 async def download_image(
-    client: httpx.AsyncClient, url: str, semaphore: asyncio.Semaphore
+    client: httpx.AsyncClient,
+    url: str,
+    semaphore: asyncio.Semaphore,
+    max_retries: int = 3,
 ):
     """Download a single image with improved error handling and debugging"""
     async with semaphore:  # Limit concurrent downloads
         global download_stats
         download_stats["total_processed"] += 1
 
-        try:
-            relative_path = url.replace(BASE_URL, "")
-            file_path = DATA_PATH / relative_path
+        for attempt in range(max_retries + 1):
+            try:
+                relative_path = url.replace(BASE_URL, "")
+                file_path = DATA_PATH / relative_path
 
-            # Check if file already exists
-            if file_path.exists() and file_path.stat().st_size > 0:
-                download_stats["exists"] += 1
-                print(
-                    f"[DEBUG] File {file_path} already exists (size: {file_path.stat().st_size / 1e6:.2f}MB)"
-                )
-                return
+                # Check if file already exists
+                if file_path.exists() and file_path.stat().st_size > 0:
+                    download_stats["exists"] += 1
+                    print(
+                        f"[DEBUG] File {file_path} already exists (size: {file_path.stat().st_size / 1e6:.2f}MB)"
+                    )
+                    return
 
-            # Create parent directory
-            file_path.parent.mkdir(parents=True, exist_ok=True)
+                # Create parent directory
+                file_path.parent.mkdir(parents=True, exist_ok=True)
 
-            response = await asyncio.wait_for(
-                client.get(url, auth=(USERNAME, PASSWORD), follow_redirects=True),
-                timeout=120.0,
-            )
-
-            if response.status_code == 401:
-                print(f"[AUTH ERROR] 401 Unauthorized for {url}")
-                download_stats["failed"] += 1
-                return
-            elif response.status_code == 404:
-                print(f"[NOT FOUND] 404 for {url}")
-                download_stats["failed"] += 1
-                return
-
-            response.raise_for_status()
-
-            # Check if we got actual content
-            if len(response.content) == 0:
-                print(f"[WARNING] Empty content for {url}")
-                download_stats["failed"] += 1
-                return
-
-            with file_path.open("wb") as f:
-                f.write(response.content)
-
-            download_stats["success"] += 1
-
-            if download_stats["total_processed"] % 50 == 0:
-                print(
-                    f"[PROGRESS] Processed: {download_stats['total_processed']}, "
-                    f"Success: {download_stats['success']}, "
-                    f"Exists: {download_stats['exists']}, "
-                    f"Failed: {download_stats['failed']}"
-                )
-                print(
-                    f"[LATEST] Downloaded {file_path} ({len(response.content) / 1e6:.2f} MB)"
+                response = await asyncio.wait_for(
+                    client.get(url, auth=(USERNAME, PASSWORD), follow_redirects=True),
+                    timeout=120.0,
                 )
 
-        except asyncio.TimeoutError:
-            print(f"[TIMEOUT] Download timeout for {url}")
-            download_stats["failed"] += 1
-        except httpx.HTTPStatusError as e:
-            print(f"[HTTP ERROR] {e.response.status_code} for {url}")
-            download_stats["failed"] += 1
-        except Exception as e:
-            print(f"[ERROR] Failed to download {url}: {type(e).__name__}: {e}")
-            download_stats["failed"] += 1
+                if response.status_code == 401:
+                    print(f"[AUTH ERROR] 401 Unauthorized for {url}")
+                    download_stats["failed"] += 1
+                    return
+                elif response.status_code == 404:
+                    print(f"[NOT FOUND] 404 for {url}")
+                    download_stats["failed"] += 1
+                    return
+
+                response.raise_for_status()
+
+                # Check if we got actual content
+                if len(response.content) == 0:
+                    print(f"[WARNING] Empty content for {url}")
+                    download_stats["failed"] += 1
+                    return
+
+                with file_path.open("wb") as f:
+                    f.write(response.content)
+
+                download_stats["success"] += 1
+
+                if download_stats["total_processed"] % 50 == 0:
+                    print(
+                        f"[PROGRESS] Processed: {download_stats['total_processed']}, "
+                        f"Success: {download_stats['success']}, "
+                        f"Exists: {download_stats['exists']}, "
+                        f"Failed: {download_stats['failed']}"
+                    )
+                    print(
+                        f"[LATEST] Downloaded {file_path} ({len(response.content) / 1e6:.2f} MB)"
+                    )
+                return
+
+            except asyncio.TimeoutError:
+                if attempt < max_retries:
+                    print(
+                        f"[RETRY] Timeout for {url}, attempt {attempt + 1}/{max_retries}"
+                    )
+                    await asyncio.sleep(1)
+                    continue
+                print(f"[TIMEOUT] Download timeout for {url}")
+                download_stats["failed"] += 1
+            except httpx.HTTPStatusError as e:
+                print(f"[HTTP ERROR] {e.response.status_code} for {url}")
+                download_stats["failed"] += 1
+                return
+            except Exception as e:
+                if attempt < max_retries:
+                    print(f"[RETRY] Error for {url}, attempt {attempt + 1}/{max_retries}: {e}")
+                    await asyncio.sleep(1)
+                    continue
+                print(f"[ERROR] Failed to download {url}: {type(e).__name__}: {e}")
+                download_stats["failed"] += 1
 
 
 async def main():
