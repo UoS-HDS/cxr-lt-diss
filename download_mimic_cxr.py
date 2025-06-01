@@ -120,10 +120,9 @@ async def download_image(
             # Check if file already exists
             if file_path.exists() and file_path.stat().st_size > 0:
                 download_stats["exists"] += 1
-                if download_stats["total_processed"] % 500 == 0:
-                    print(
-                        f"[DEBUG] File {file_path} already exists (processed: {download_stats['total_processed']})"
-                    )
+                print(
+                    f"[DEBUG] File {file_path} already exists (size: {file_path.stat().st_size / 1e6:.2f}MB)"
+                )
                 return
 
             # Create parent directory
@@ -131,7 +130,7 @@ async def download_image(
 
             response = await asyncio.wait_for(
                 client.get(url, auth=(USERNAME, PASSWORD), follow_redirects=True),
-                timeout=60.0,
+                timeout=120.0,
             )
 
             if response.status_code == 401:
@@ -164,7 +163,7 @@ async def download_image(
                     f"Failed: {download_stats['failed']}"
                 )
                 print(
-                    f"[LATEST] Downloaded {file_path} ({len(response.content)} bytes)"
+                    f"[LATEST] Downloaded {file_path} ({len(response.content) / 1e6:.2f} MB)"
                 )
 
         except asyncio.TimeoutError:
@@ -181,7 +180,7 @@ async def download_image(
 async def main():
     """Main function"""
     SAVED_URLS = Path("urls.txt")
-    MAX_CONN = 20
+    MAX_CONN = 30
     img_urls = set()
 
     if not SAVED_URLS.exists():
