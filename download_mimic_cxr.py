@@ -180,7 +180,7 @@ async def download_image(
 async def main():
     """Main function"""
     SAVED_URLS = Path("urls.txt")
-    MAX_CONN = 30
+    MAX_CONN = 15
     img_urls = set()
 
     if not SAVED_URLS.exists():
@@ -227,6 +227,7 @@ async def main():
     async with httpx.AsyncClient(
         headers=HEADERS,
         timeout=30.0,
+        limits=httpx.Limits(max_connections=MAX_CONN, max_keepalive_connections=10),
         cookies=httpx.Cookies(),
     ) as client:
         tasks = []
