@@ -12,13 +12,13 @@ def download_data(bucket_name: str, project: str, data_dir: Path):
 
     client = storage.Client(project=project)
     bucket = client.bucket(bucket_name, user_project=project)
-    blobs = list(client.list_blobs(bucket))
-    for blob in tqdm(blobs, total=len(blobs), desc="Downloading dataset"):
+    blobs = client.list_blobs(bucket)
+    for blob in tqdm(blobs, desc="Downloading dataset"):
         # Create local path
         local_path: Path = data_dir / blob.name
         local_path.parent.mkdir(parents=True, exist_ok=True)
 
-        print(f"Downloading {blob.name} to {local_path}")
+        print(f"\n  Downloading {blob.name} to {local_path}")
         blob.download_to_filename(local_path)
 
 
@@ -28,16 +28,6 @@ if __name__ == "__main__":
     if not PROJECT:
         print("specify GC project to use for client by setting GC_PROJECT env variable")
         os._exit(1)
-    # KEY_PATH = os.getenv("GC_SERVICE_KEY_FILE")
-    # if not KEY_PATH:
-    #    print(
-    #        "Set the GC_SERVICE_KEY_FILE env variable to the path "
-    #        "of service account json credential file"
-    #    )
-    #    os._exit(1)
-    # if not Path(KEY_PATH).exists():
-    #    print(f"{KEY_PATH} Key file not found")
-    #    os._exit(1)
 
     DATA_DIR = Path("data/mimic-cxr-jpg-2.1.0")
     DATA_DIR.mkdir(parents=True, exist_ok=True)
