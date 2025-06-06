@@ -167,7 +167,7 @@ async def download_image(
                         f"Failed: {download_stats['failed']}"
                     )
                     print(
-                        f"[LATEST] Downloaded {file_path} ({len(response.content) / 1e6:.2f} MB)"
+                        f"[LATEST] Downloaded {file_path} ({len(response.content) / 1e6:.2f}MB)"
                     )
                 return
 
@@ -186,7 +186,7 @@ async def download_image(
                 return
             except Exception as e:
                 if attempt < max_retries:
-                    print(f"[RETRY] Error for {url}, attempt {attempt + 1}/{max_retries}: {e}")
+                    print(f"[RETRY] Error for {url}, attempt {attempt + 1}/{max_retries}: {type(e).__name__}")
                     await asyncio.sleep(1)
                     continue
                 print(f"[ERROR] Failed to download {url}: {type(e).__name__}: {e}")
@@ -196,7 +196,7 @@ async def download_image(
 async def main():
     """Main function"""
     SAVED_URLS = Path("urls.txt")
-    MAX_CONN = 15
+    MAX_CONN = 10
     img_urls = set()
 
     if not SAVED_URLS.exists():
@@ -232,6 +232,7 @@ async def main():
         print("Loading URLs from existing urls.txt file...")
         with SAVED_URLS.open("r") as f:
             img_urls = set(line.strip() for line in f if line.strip())
+
         print(f"Loaded {len(img_urls)} URLs from file")
 
     print("\nStarting downloads...")
