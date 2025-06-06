@@ -13,11 +13,9 @@ def download_data(bucket_name: str, project: str, data_dir: Path):
     bucket = client.bucket(bucket_name, user_project=project)
     blobs = client.list_blobs(bucket)
     for blob in blobs:
-        print(blob.name)
-        return
         # Create local path
-        local_path = data_dir / blob.name
-        local_path.mkdir(parents=True, exist_ok=True)
+        local_path: Path = data_dir / blob.name
+        local_path.parent.mkdir(parents=True, exist_ok=True)
 
         print(f"Downloading {blob.name} to {local_path}")
         blob.download_to_filename(local_path)
