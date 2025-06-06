@@ -10,7 +10,7 @@ def download_data(bucket_name: str, project: str, data_dir: Path):
     """download data from gc bucket"""
 
     client = storage.Client(project=project)
-    bucket = client.bucket(bucket_name)
+    bucket = client.bucket(bucket_name, user_project=project)
     blobs = client.list_blobs(bucket)
     for blob in blobs:
         print(blob.name)
