@@ -1,0 +1,53 @@
+---
+title: "CXR-LT: Long-tailed Multi-label Classification of Chest X-Rays"
+author: Nasir Abdulrasheed
+format:
+    pdf:
+        toc: true
+        toc-title: "Table of Contents"
+        fig_caption: true
+        number-sections: true
+        colorlinks: true
+        cite-method: biblatex
+bibliography: refs.bib
+csl: apa.csl
+---
+
+{{<pagebreak>}}
+
+# Description
+Chest x-rays (CXRs) and medical imaging in general yield a long-tailed distribution, with a few prevalent labels and a significantly larger number of rare labels [@holste_towards_2024]. This makes traditionally trained neural networks biased towards the common 'head' classes and evaluate very poorly on 'tail' classes. This combination of being long-tailed and multi-label (label co-occurrence) makes the accurate classification of CXRs challenging. Additionally, many diagnostic features on CXRs are so rare yet important that creating models with few- and zero-shot classification capabilities is difficult, owing to the rarity or lack of samples to train on. Also, there are relatively few proven training methodologies that reliably improve the performance of models in long-tailed and multi-label settings. Overall, it can be surmised that zero-shot long-tailed multi-label recognition should be the gold standard in medical image analysis, as that would match the real-world scenario of having to classify images with very few or no training samples available for some classes. It would also more closely match what radiologists actually do in practice.
+
+To foster research in this direction, a curated long-tailed and multi-label dataset of CXRs was created and released in 2023 by @holste_towards_2024, along with a challenge with specific objectives. This project aims to contribute to the body of research in this space by applying recommendations published by the challenge authors based on the results of the first iteration of the challenge to new experiments to improve the performance of existing solutions, while also interrogating them to uncover new insights into long-tailed multi-label classification of medical images.
+
+# Objectives
+## Primary
+1. Investigate the impact of using robust asymmetric loss (RAL) vs asymmetric loss (ASL) + weighted BCE in training CheXFusion (@kim_chexfusion_2023) in place of the asymmetric focal loss initially used [@park_robust_2023].
+2. Investigate a modified architecture by substituting simple class queries with label embeddings from PubMedBERT or UmlsBERT [@gu_domain-specific_2022;@michalopoulos_umlsbert_2021].
+3. Robustly investigate the zero-shot capabilities of the model from (2)
+
+## Secondary
+1. Perform a comprehensive comparison of experiment results with the current state-of-the-art models on the same dataset.
+2. Experiment with creating view-specific CNN backbones for the fusion model, as opposed to the single backbone used in the original CheXFusion paper [@kim_chexfusion_2023].
+
+## Tertiary
+1. Develop a web wrapper around the deployed model to test the final model in the real world, allowing users to upload CXRs and receive predictions.
+
+# Ethics
+A full ethics application is required for the project, as pseudo-anonymised human image data is being used in the analysis. The full ethics form has been submitted, and approval has been secured.
+
+# Resources
+Resources needed include access:
+
+- dataset hosted on PhysionNet (see @sec-appendix-a)
+- GPU compute resources for training and inference
+- model and web hosting platforms for deployment
+
+# References
+::: {#refs}
+:::
+
+# Appendix A {#sec-appendix-a}
+- CXR-LT 2024: [https://physionet.org/content/cxr-lt-iccv-workshop-cvamd/2.0.0/](https://physionet.org/content/cxr-lt-iccv-workshop-cvamd/2.0.0/)
+- CXR-LT 2023: [https://physionet.org/content/cxr-lt-iccv-workshop-cvamd/1.1.0/](https://physionet.org/content/cxr-lt-iccv-workshop-cvamd/1.1.0/)
+- MIMIC-CXR-JPG V2.0.0: [https://physionet.org/content/mimic-cxr-jpg/2.0.0/](https://physionet.org/content/mimic-cxr-jpg/2.0.0/)
