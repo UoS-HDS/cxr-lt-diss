@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 from google.cloud import storage
+from tqdm import tqdm
 
 
 def download_data(bucket_name: str, project: str, data_dir: Path):
@@ -11,8 +12,8 @@ def download_data(bucket_name: str, project: str, data_dir: Path):
 
     client = storage.Client(project=project)
     bucket = client.bucket(bucket_name, user_project=project)
-    blobs = client.list_blobs(bucket)
-    for blob in blobs:
+    blobs = list(client.list_blobs(bucket))
+    for blob in tqdm(blobs, total=len(blobs), desc="Downloading dataset"):
         # Create local path
         local_path: Path = data_dir / blob.name
         local_path.parent.mkdir(parents=True, exist_ok=True)
