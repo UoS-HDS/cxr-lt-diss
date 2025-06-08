@@ -13,7 +13,7 @@ def download_data(bucket_name: str, project: str, data_dir: Path):
     client = storage.Client(project=project)
     bucket = client.bucket(bucket_name, user_project=project)
     blobs = client.list_blobs(bucket)
-    for blob in tqdm(blobs, desc="Downloading dataset"):
+    for blob in tqdm(blobs, total=377119, desc="Downloading dataset"):
         # Create local path
         local_path: Path = data_dir / blob.name
         local_path.parent.mkdir(parents=True, exist_ok=True)
