@@ -1,0 +1,5 @@
+Bootstrap: docker
+From: nvcr.io/nvidia/pytorch:25.05-py3
+
+%post
+    python -m pip install --no-cache-dir uv==0.7.13
