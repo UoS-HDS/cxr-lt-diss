@@ -23,14 +23,19 @@ class CxrDataModule(pl.LightningDataModule):
         self.cfg = datamodule_cfg
         self.df = pd.read_csv(self.cfg["train_df_path"])
         self.dataloader_init_args = dataloader_init_args
+        self.use_pseudo_label = int(self.cfg["use_pseudo_label"])
 
         loader_type = self.cfg["loader_type"]
         if loader_type == "single":
             self.dataset_cls = CxrDataset
-        else:
+        elif loader_type == "fusion":
             self.dataset_cls = CxrStudyIdDataset
+        else:
+            raise ValueError(
+                f"Unknown loader_type: {loader_type}. Expected 'single' or 'fusion'."
+            )
 
-        if self.cfg["use_pseudo_label"]:
+        if self.use_pseudo_label:
             print("Using pseudo label...")
             self.vin_df = pd.read_csv(self.cfg["vinbig_pseudo_train_df_path"])
             self.nih_df = pd.read_csv(self.cfg["nih_pseudo_train_df_path"])
@@ -56,7 +61,7 @@ class CxrDataModule(pl.LightningDataModule):
             self.train_dataset = self.dataset_cls(self.cfg, train_df, transforms_train)
             self.val_dataset = self.dataset_cls(self.cfg, val_df, transforms_val)
 
-            if self.cfg["use_pseudo_label"]:
+            if self.use_pseudo_label:
                 vin_dataset = VinBigDataset(self.cfg, self.vin_df, transforms_train)
                 nih_dataset = NihDataset(self.cfg, self.nih_df, transforms_train)
                 chexpert_dataset = ChexpertDataset(

@@ -20,20 +20,25 @@ class ChexpertWriter(BasePredictionWriter):
         chexpert_train_df_path: str,
         chexpert_pseudo_train_df_path: str,
         write_interval: Literal["epoch", "batch", "batch_and_epoch"],
+        num_classes: int = 40,
     ):
         super().__init__(write_interval)
         self.chexpert_train_df_path = chexpert_train_df_path
         self.chexpert_pseudo_train_df_path = chexpert_pseudo_train_df_path
+        self.num_classes = num_classes
 
     def write_on_epoch_end(self, trainer, pl_module, predictions, batch_indices):
         predictions = torch.cat(predictions, dim=0)
         preds = predictions.float().squeeze(0).detach().cpu().numpy()
 
         save_dir = Path(self.chexpert_pseudo_train_df_path).parent
+        save_dir.mkdir(parents=True, exist_ok=True)
         np.save(save_dir / "chexpert_preds.npy", preds)
 
+        n = self.num_classes
+
         chexpert_train_df = pd.read_csv(self.chexpert_train_df_path)
-        org = np.array(chexpert_train_df.iloc[:, -40:].values).astype(np.float32)
+        org = np.array(chexpert_train_df.iloc[:, -n:].values).astype(np.float32)
 
         # Flatten batch_indices to get the actual row indices
         batch_indices = list(flatten(batch_indices))
@@ -46,7 +51,7 @@ class ChexpertWriter(BasePredictionWriter):
         predicted_rows[mask] = preds[mask]
         org[batch_indices] = predicted_rows
 
-        chexpert_train_df.iloc[:, -40:] = org
+        chexpert_train_df.iloc[:, -n:] = org
         chexpert_train_df.to_csv(self.chexpert_pseudo_train_df_path, index=False)
 
         print(f"Chexpert pseudo labels saved to {self.chexpert_pseudo_train_df_path}")

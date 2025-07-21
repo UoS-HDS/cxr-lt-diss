@@ -6,7 +6,7 @@ import pandas as pd
 from lightning.pytorch.callbacks import BasePredictionWriter
 
 
-class Task1SubmissonWriter(BasePredictionWriter):
+class Task2SubmissonWriter(BasePredictionWriter):
     def __init__(
         self,
         sample_submit_path,
@@ -38,14 +38,14 @@ class Task1SubmissonWriter(BasePredictionWriter):
         preds = predictions.cpu().numpy() >= 0.5
         # if the normal class (24) is predicted, set all other classes to 0
         # except support devices class (37)
-        mask = preds[:, 24] == 1  # Normal class
-        keep_cols = [24, 37]
+        mask = preds[:, 15] == 1  # Normal class
+        keep_cols = [15, 24]
 
         for i in range(preds.shape[1]):
             if i not in keep_cols:
                 preds[mask, i] = 0
 
-        temp_df = pd.DataFrame(preds.astype(int), columns=pred_df.columns[-40:])
+        temp_df = pd.DataFrame(preds.astype(int), columns=pred_df.columns[-26:])
         temp_df["study_id"] = list(pred_df.groupby("study_id").groups.keys())
         temp_df = pred_df[["study_id", "dicom_id"]].merge(
             temp_df,
