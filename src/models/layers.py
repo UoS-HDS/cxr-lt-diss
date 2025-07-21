@@ -10,26 +10,59 @@ import timm
 import torch.nn as nn
 import copy
 import einops
+
+# from torch.utils.checkpoint import checkpoint
 from positional_encodings.torch_encodings import PositionalEncoding2D, Summer
 
 from src.models.ml_decoder import MLDecoder
+from src.util import get_model
 
 
 class Backbone(nn.Module):
     """Backbone trained in Stage 1"""
 
-    def __init__(self, timm_init_args: dict):
+    def __init__(
+        self,
+        model_type: str,
+        model_init_args: dict,
+        zsl: int = 0,
+        target_dim: int = 768,
+        enable_checkpointing: bool = True,
+    ):
         super().__init__()
-        self.model = timm.create_model(**timm_init_args)
+        self.model = get_model(model_type, model_init_args)
         self.model.head = nn.Identity()
-        self.pos_encoding = Summer(PositionalEncoding2D(768))
+        self.enable_checkpointing = enable_checkpointing
+
+        # Enable gradient checkpointing for ConvNeXt if available
+        if hasattr(self.model, "set_grad_checkpointing") and enable_checkpointing:
+            self.model.set_grad_checkpointing(True)
+
+        # Auto-detect input dimensions
+        with torch.no_grad():
+            dummy_input = torch.randn(1, 3, 1024, 1024)  # Use your actual input size
+            dummy_output = self.model(dummy_input)
+            input_dim = dummy_output.shape[1]
+
+        # Project to standard dimension for fair comparison
+        if input_dim != target_dim:
+            self.projection = nn.Conv2d(
+                input_dim, target_dim, kernel_size=1, bias=False
+            )
+        else:
+            self.projection = nn.Identity()
+
+        self.pos_encoding = Summer(PositionalEncoding2D(target_dim))
         self.head = MLDecoder(
-            num_classes=timm_init_args["num_classes"],
-            initial_num_features=768,
+            num_classes=model_init_args["num_classes"],
+            initial_num_features=target_dim,
+            zsl=zsl,
         )
 
     def forward(self, x):
         x = self.model(x)
+
+        x = self.projection(x)  # Project to standard 768 dimensions
         x = self.pos_encoding(x)
         x = self.head(x)
         return x
@@ -43,24 +76,56 @@ class FusionBackbone(nn.Module):
     If pretrained_path is None, the model will be initialized randomly and trained
     """
 
-    def __init__(self, timm_init_args: dict, pretrained_path: str | Path | None = None):
+    def __init__(
+        self,
+        model_type: str,
+        model_init_args: dict,
+        zsl: int = 0,
+        pretrained_path: str | Path | None = None,
+        target_dim: int = 768,
+        enable_checkpointing: bool = True,
+    ):
         super().__init__()
-        self.model = timm.create_model(**timm_init_args)
+        self.model = get_model(model_type, model_init_args)
         self.model.head = nn.Identity()
+        self.enable_checkpointing = enable_checkpointing
+
+        # Enable gradient checkpointing for ConvNeXt if available
+        if hasattr(self.model, "set_grad_checkpointing") and enable_checkpointing:
+            self.model.set_grad_checkpointing(True)
+
+        # Auto-detect input dimensions
+        with torch.no_grad():
+            dummy_input = torch.randn(1, 3, 1024, 1024)
+            dummy_output = self.model(dummy_input)
+            input_dim = dummy_output.shape[1]
+
         if pretrained_path is not None:
             self.model.load_state_dict(torch.load(pretrained_path))
         self.model.head = nn.Identity()
-        self.conv2d = nn.Conv2d(768, 768, kernel_size=3, stride=2, padding=1)
-        self.pos_encoding = Summer(PositionalEncoding2D(768))
-        self.padding_token = nn.Parameter(torch.randn(1, 768, 1, 1))
-        self.segment_embedding = nn.Parameter(torch.randn(4, 768, 1, 1))
+
+        # Project backbone features to standard dimension
+        if input_dim != target_dim:
+            self.backbone_projection = nn.Conv2d(
+                input_dim, target_dim, kernel_size=1, bias=False
+            )
+        else:
+            self.backbone_projection = nn.Identity()
+
+        self.conv2d = nn.Conv2d(
+            target_dim, target_dim, kernel_size=3, stride=2, padding=1
+        )
+        self.pos_encoding = Summer(PositionalEncoding2D(target_dim))
+        self.padding_token = nn.Parameter(torch.randn(1, target_dim, 1, 1))
+        self.segment_embedding = nn.Parameter(torch.randn(4, target_dim, 1, 1))
 
         self.head = MLDecoder(
-            num_classes=timm_init_args["num_classes"],
-            initial_num_features=768,
+            num_classes=model_init_args["num_classes"],
+            initial_num_features=target_dim,
+            zsl=zsl,
         )
         self.transformer_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=768, nhead=8),
+            nn.TransformerEncoderLayer(d_model=target_dim, nhead=8),
             num_layers=2,
         )
 
@@ -71,9 +136,14 @@ class FusionBackbone(nn.Module):
         no_pad = torch.nonzero(x.sum(dim=(1, 2, 3)) != 0).squeeze(1)
         x = x[no_pad]
 
+        # Use gradient checkpointing if enabled
+        # if self.enable_checkpointing and self.training:
+        #     x = checkpoint(self.model, x, use_reentrant=False)
+        # else:
         with torch.no_grad():
             x = self.model(x).detach()
 
+        x = self.backbone_projection(x)  # Project to standard dimensions
         x = self.conv2d(x)
         x = self.pos_encoding(x)
 
