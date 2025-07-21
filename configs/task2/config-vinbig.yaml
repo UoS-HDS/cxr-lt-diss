@@ -1,0 +1,165 @@
+seed_everything: 8089
+trainer:
+  accelerator: auto
+  strategy: ddp_find_unused_parameters_true
+  devices: auto
+  num_nodes: 1
+  precision: 16-mixed
+  logger:
+    # - class_path: lightning.pytorch.loggers.NeptuneLogger
+    #   init_args:
+    #     project: st-andrews-droncogene/chexfusion++
+    #     name: 384, tiny, baseline
+    #     log_model_checkpoints: false
+    - class_path: lightning.pytorch.loggers.TensorBoardLogger
+      init_args:
+        save_dir: .out/tb/1024/
+        name: convnext+ral+1024/stage-1/task2/
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/backbones/task2/ckpts/1024/convnext+ral+1024
+        filename: "{epoch:02d}-{val_loss:.4f}-{val_ap:.5f}"
+        save_top_k: 1
+        save_last: true
+        monitor: val_ap
+        mode: max
+    - class_path: src.callbacks.vinbig_pseudo_callback.VinBigWriter
+      init_args:
+        write_interval: epoch
+        vinbig_train_df_path: data/vinbig-cxr/train_expanded_26.csv
+        vinbig_pseudo_train_df_path: data/vinbig-cxr/train_expanded_pseudo_26.csv
+        num_classes: 26
+    - class_path: lightning.pytorch.callbacks.early_stopping.EarlyStopping
+      init_args:
+        monitor: val_ap
+        mode: max
+        patience: 10
+  fast_dev_run: false
+  overfit_batches: 0.0
+  val_check_interval: 0.25
+  num_sanity_val_steps: 2
+  accumulate_grad_batches: 4
+  gradient_clip_val: null
+  deterministic: null
+  benchmark: true
+  max_epochs: 150
+model:
+  lr: 3e-5
+  classes:
+    - Atelectasis
+    - Calcification of the Aorta
+    - Cardiomegaly
+    - Consolidation
+    - Edema
+    - Emphysema
+    - Enlarged Cardiomediastinum
+    - Fibrosis
+    - Fracture
+    - Hernia
+    - Infiltration
+    - Lung Lesion
+    - Lung Opacity
+    - Mass
+    - Nodule
+    - Normal
+    - Pleural Effusion
+    - Pleural Other
+    - Pleural Thickening
+    - Pneumomediastinum
+    - Pneumonia
+    - Pneumoperitoneum
+    - Pneumothorax
+    - Subcutaneous Emphysema
+    - Support Devices
+    - Tortuous Aorta
+  loss_init_args:
+    type: ral
+    class_instance_nums:
+      - 63471
+      - 4161
+      - 71794
+      - 14822
+      - 36137
+      - 3462
+      - 28673
+      - 1075
+      - 11193
+      - 3756
+      - 9431
+      - 2202
+      - 74659
+      - 4978
+      - 7140
+      - 32885
+      - 64252
+      - 580
+      - 3124
+      - 694
+      - 43744
+      - 505
+      - 13562
+      - 2019
+      - 83899
+      - 3078
+    total_instance_num: 248137
+  model_type: convnext
+  model_init_args:
+    num_classes: 26
+    model_name: convnext_small.fb_in22k_ft_in1k_384
+    pretrained: true
+data:
+  dataloader_init_args:
+    batch_size: 1
+    num_workers: 8
+    pin_memory: true
+    persistent_workers: true
+  datamodule_cfg:
+    predict_pseudo_label: vinbig
+    use_pseudo_label: false # true, false
+    loader_type: single # single, fusion
+    data_dir: data/
+    resized_dir: data-resized/
+    train_df_path: data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/train_labeled_26.csv
+    task1_df_path: data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/development_labeled_task1.csv
+    task2_df_path: data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/development_labeled_task2.csv
+    zero_shot_df_path: data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/development_task3.csv
+    vinbig_train_df_path: data/vinbig-cxr/train_expanded_26.csv
+    vinbig_pseudo_train_df_path: data/vinbig-cxr/train_expanded_pseudo_26.csv
+    nih_train_df_path: data/nih-cxr/train_expanded_26.csv
+    nih_pseudo_train_df_path: data/nih-cxr/train_expanded_pseudo_26.csv
+    chexpert_train_df_path: data/chexpert/CheXpert-v1.0/train_expanded_26.csv
+    chexpert_pseudo_train_df_path: data/chexpert/CheXpert-v1.0/train_expanded_pseudo_26.csv
+    save_dir: checkpoints/backbones
+    val_split: 0.1
+    seed: 8089
+    size: 1024
+    classes:
+      - Atelectasis
+      - Calcification of the Aorta
+      - Cardiomegaly
+      - Consolidation
+      - Edema
+      - Emphysema
+      - Enlarged Cardiomediastinum
+      - Fibrosis
+      - Fracture
+      - Hernia
+      - Infiltration
+      - Lung Lesion
+      - Lung Opacity
+      - Mass
+      - Nodule
+      - Normal
+      - Pleural Effusion
+      - Pleural Other
+      - Pleural Thickening
+      - Pneumomediastinum
+      - Pneumonia
+      - Pneumoperitoneum
+      - Pneumothorax
+      - Subcutaneous Emphysema
+      - Support Devices
+      - Tortuous Aorta
+
+ckpt_path: null

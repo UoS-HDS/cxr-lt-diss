@@ -18,11 +18,11 @@ trainer:
   callbacks:
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
-        dirpath: checkpoints/backbone-vanilla
+        dirpath: checkpoints/fusion
         filename: '{epoch:02d}-{val_loss:.4f}-{val_ap:.5f}'
         save_top_k: 10
-        monitor: val_loss
-        mode: min
+        monitor: val_ap
+        mode: max
     # - class_path: callbacks.submit_callback.SubmissonWriter
     #   init_args:
     #       write_interval: epoch
@@ -69,7 +69,7 @@ trainer:
   overfit_batches: 0.0
   val_check_interval: 0.25
   num_sanity_val_steps: 2
-  accumulate_grad_batches: 1
+  accumulate_grad_batches: 4
   gradient_clip_val: null 
   deterministic: null
   benchmark: true
@@ -164,11 +164,11 @@ model:
     total_instance_num: 258871
   timm_init_args:
     num_classes: 40
-    model_name: convnext_tiny.fb_in22k_ft_in1k_384
+    model_name: convnext_small.fb_in22k_ft_in1k_384
     pretrained: true
 data:
   dataloader_init_args:
-    batch_size: 16
+    batch_size: 1
     num_workers: 8
     pin_memory: true
     persistent_workers: true
@@ -191,7 +191,7 @@ data:
     save_dir: checkpoints
     val_split: 0.1
     seed: 8089
-    size: 384
+    size: 1024
     classes: 
       - Adenopathy
       - Atelectasis

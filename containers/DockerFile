@@ -1,0 +1,33 @@
+FROM nvcr.io/nvidia/pytorch:24.08-py3
+
+# Install uv using pip
+RUN pip install uv
+
+# Verify installation
+RUN uv --version
+
+# Create a non-root user with a common UID/GID
+ARG USER_ID=5003
+ARG GROUP_ID=5003
+RUN groupadd -g $GROUP_ID appuser && \
+    useradd -r -u $USER_ID -g appuser -m -d /home/appuser appuser
+
+# Create directories for configs and pseudo_labels
+RUN mkdir -p /opt/venv /opt/configs /opt/pseudo_labels /tmp/uv-cache /workspace && \
+    chown -R appuser:appuser /opt/venv /opt/configs /opt/pseudo_labels /tmp/uv-cache /workspace /home/appuser
+
+# Set UV cache directory to a writable location
+ENV UV_CACHE_DIR=/tmp/uv-cache
+
+# Set working directory
+WORKDIR /workspace
+
+# Switch to non-root user
+USER appuser
+
+# Create a virtual environment with Python 3.12 as the user
+RUN uv venv /opt/venv --python=3.12.9
+ENV PATH="/opt/venv/bin:${PATH}"
+
+# Verify Python version
+RUN python --version

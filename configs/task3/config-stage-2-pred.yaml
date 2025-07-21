@@ -14,15 +14,15 @@ trainer:
     - class_path: lightning.pytorch.loggers.TensorBoardLogger
       init_args:
         save_dir: .out/tb/
-        name: stage-1
+        name: stage-2
   callbacks:
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
-        dirpath: checkpoints/backbone-vanilla
+        dirpath: checkpoints/fusion
         filename: '{epoch:02d}-{val_loss:.4f}-{val_ap:.5f}'
         save_top_k: 10
-        monitor: val_loss
-        mode: min
+        monitor: val_ap
+        mode: max
     # - class_path: callbacks.submit_callback.SubmissonWriter
     #   init_args:
     #       write_interval: epoch
@@ -45,13 +45,13 @@ trainer:
     # - class_path: src.callbacks.vinbig_pseudo_callback.VinBigWriter
     #   init_args:
     #       write_interval: epoch
-    #       vinbig_train_df_path: data/vinbig/train_expanded.csv
-    #       vinbig_pseudo_train_df_path: data/vinbig/train_expanded_pseudo.csv
-    - class_path: src.callbacks.nih_pseudo_callback.NIHWriter 
-      init_args:
-          write_interval: epoch
-          nih_train_df_path: data/nih-cxr/train_expanded.csv
-          nih_pseudo_train_df_path: data/nih-cxr/train_expanded_pseudo.csv
+    #       vinbig_train_df_path: data/vinbig-cxr/train_expanded.csv
+    #       vinbig_pseudo_train_df_path: data/vinbig-cxr/train_expanded_pseudo.csv
+    # - class_path: src.callbacks.nih_pseudo_callback.NIHWriter 
+    #   init_args:
+    #       write_interval: epoch
+    #       nih_train_df_path: data/nih-cxr/train_expanded.csv
+    #       nih_pseudo_train_df_path: data/nih-cxr/train_expanded_pseudo.csv
     # - class_path: src.callbacks.chexpert_pseudo_callback.ChexpertWriter 
     #   init_args:
     #       write_interval: epoch
@@ -69,13 +69,14 @@ trainer:
   overfit_batches: 0.0
   val_check_interval: 0.25
   num_sanity_val_steps: 2
-  accumulate_grad_batches: 1
+  accumulate_grad_batches: 4
   gradient_clip_val: null 
   deterministic: null
   benchmark: true
   max_epochs: 150
 model:
   lr: 3e-5
+  pretrained_path: checkpoints/backbones/model.pth
   classes: 
     - Adenopathy
     - Atelectasis
@@ -163,20 +164,21 @@ model:
     total_instance_num: 258871
   timm_init_args:
     num_classes: 40
-    model_name: convnext_tiny.fb_in22k_ft_in1k_384
+    model_name: convnext_small.fb_in22k_ft_in1k_384
     pretrained: true
 data:
   dataloader_init_args:
-    batch_size: 16
+    batch_size: 1
     num_workers: 8
     pin_memory: true
     persistent_workers: true
   datamodule_cfg: 
-    predict_pseudo_label: nih
-    use_pseudo_label: false #true
-    loader_type: single
+    predict_pseudo_label: null  # chexpert, nih, vinbig
+    use_pseudo_label: false  # true, false
+    loader_type: fusion  # single, fusion
     data_dir: data/
     resized_dir: data-resized/
+    pred_df_path: data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/development_labeled_task1.csv
     train_df_path: data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/train_labeled.csv
     task1_df_path: data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/development_labeled_task1.csv
     task2_df_path: data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/development_labeled_task2.csv
@@ -190,7 +192,7 @@ data:
     save_dir: checkpoints
     val_split: 0.1
     seed: 8089
-    size: 384
+    size: 1024
     classes: 
       - Adenopathy
       - Atelectasis
@@ -233,4 +235,4 @@ data:
       - Tortuous Aorta
       - Tuberculosis
 
-ckpt_path: checkpoints/backbone-vanilla/epoch=21-val_loss=0.0440-val_ap=0.25501.ckpt
+ckpt_path: checkpoints/fusion/epoch=08-val_loss=0.0447-val_ap=0.24103.ckpt

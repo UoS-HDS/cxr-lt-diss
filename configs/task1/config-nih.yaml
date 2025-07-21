@@ -1,0 +1,207 @@
+seed_everything: 8089
+trainer:
+  accelerator: auto
+  strategy: ddp_find_unused_parameters_true
+  devices: auto
+  num_nodes: 1
+  precision: 16-mixed
+  logger:
+    # - class_path: lightning.pytorch.loggers.NeptuneLogger
+    #   init_args:
+    #     project: st-andrews-droncogene/chexfusion++
+    #     name: 384, tiny, baseline
+    #     log_model_checkpoints: false
+    - class_path: lightning.pytorch.loggers.TensorBoardLogger
+      init_args:
+        save_dir: .out/tb/1024/
+        name: medvit+asl+1024/stage-1
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/backbones/task1/ckpts/1024/medvit+asl+1024
+        filename: "{epoch:02d}-{val_loss:.4f}-{val_ap:.5f}"
+        save_top_k: 1
+        save_last: true
+        monitor: val_ap
+        mode: max
+    - class_path: src.callbacks.nih_pseudo_callback.NIHWriter
+      init_args:
+        write_interval: epoch
+        nih_train_df_path: data/nih-cxr/train_expanded.csv
+        nih_pseudo_train_df_path: .tmp/pseudolabels/medvit+asl+1024/nih/train_expanded_pseudo.csv
+        num_classes: 40
+    - class_path: lightning.pytorch.callbacks.early_stopping.EarlyStopping
+      init_args:
+        monitor: val_ap
+        mode: max
+        patience: 10
+  fast_dev_run: false
+  overfit_batches: 0.0
+  val_check_interval: 0.25
+  num_sanity_val_steps: 2
+  accumulate_grad_batches: 4
+  gradient_clip_val: null
+  deterministic: null
+  benchmark: true
+  max_epochs: 150
+model:
+  lr: 3e-5
+  classes:
+    - Adenopathy
+    - Atelectasis
+    - Azygos Lobe
+    - Calcification of the Aorta
+    - Cardiomegaly
+    - Clavicle Fracture
+    - Consolidation
+    - Edema
+    - Emphysema
+    - Enlarged Cardiomediastinum
+    - Fibrosis
+    - Fissure
+    - Fracture
+    - Granuloma
+    - Hernia
+    - Hydropneumothorax
+    - Infarction
+    - Infiltration
+    - Kyphosis
+    - Lobar Atelectasis
+    - Lung Lesion
+    - Lung Opacity
+    - Mass
+    - Nodule
+    - Normal
+    - Pleural Effusion
+    - Pleural Other
+    - Pleural Thickening
+    - Pneumomediastinum
+    - Pneumonia
+    - Pneumoperitoneum
+    - Pneumothorax
+    - Pulmonary Embolism
+    - Pulmonary Hypertension
+    - Rib Fracture
+    - Round(ed) Atelectasis
+    - Subcutaneous Emphysema
+    - Support Devices
+    - Tortuous Aorta
+    - Tuberculosis
+  loss_init_args:
+    type: asl
+    class_instance_nums:
+      - 3137
+      - 63471
+      - 191
+      - 4161
+      - 71794
+      - 158
+      - 14822
+      - 36137
+      - 3462
+      - 28673
+      - 1075
+      - 2672
+      - 11193
+      - 2794
+      - 3756
+      - 633
+      - 710
+      - 9431
+      - 686
+      - 126
+      - 2202
+      - 74659
+      - 4978
+      - 7140
+      - 32885
+      - 64252
+      - 580
+      - 3124
+      - 694
+      - 43744
+      - 505
+      - 13562
+      - 1565
+      - 864
+      - 8704
+      - 153
+      - 2019
+      - 83899
+      - 3078
+      - 1929
+    total_instance_num: 248137
+  model_type: convnext
+  # use_embeddings: false
+  model_init_args:
+    num_classes: 40
+    model_name: convnext_small.fb_in22k_ft_in1k_384
+    pretrained: true
+data:
+  dataloader_init_args:
+    batch_size: 2
+    num_workers: 8
+    pin_memory: true
+    persistent_workers: true
+  datamodule_cfg:
+    predict_pseudo_label: nih
+    use_pseudo_label: false #true
+    loader_type: single # single, fusion
+    data_dir: data/
+    resized_dir: data-resized/
+    train_df_path: data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/train_labeled_no_missing_views.csv
+    task1_df_path: data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/development_labeled_task1.csv
+    task2_df_path: data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/development_labeled_task2.csv
+    zero_shot_df_path: data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/development_task3.csv
+    vinbig_train_df_path: data/vinbig-cxr/train_expanded.csv
+    vinbig_pseudo_train_df_path: /opt/pseudo_labels/vinbig/train_expanded_pseudo.csv
+    nih_train_df_path: data/nih-cxr/train_expanded.csv
+    nih_pseudo_train_df_path: /opt/pseudo_labels/nih/train_expanded_pseudo.csv
+    chexpert_train_df_path: data/chexpert/CheXpert-v1.0/train_expanded.csv
+    chexpert_pseudo_train_df_path: /opt/pseudo_labels/chexpert/train_expanded_pseudo.csv
+    val_split: 0.1
+    seed: 8089
+    size: 1024
+    classes:
+      - Adenopathy
+      - Atelectasis
+      - Azygos Lobe
+      - Calcification of the Aorta
+      - Cardiomegaly
+      - Clavicle Fracture
+      - Consolidation
+      - Edema
+      - Emphysema
+      - Enlarged Cardiomediastinum
+      - Fibrosis
+      - Fissure
+      - Fracture
+      - Granuloma
+      - Hernia
+      - Hydropneumothorax
+      - Infarction
+      - Infiltration
+      - Kyphosis
+      - Lobar Atelectasis
+      - Lung Lesion
+      - Lung Opacity
+      - Mass
+      - Nodule
+      - Normal
+      - Pleural Effusion
+      - Pleural Other
+      - Pleural Thickening
+      - Pneumomediastinum
+      - Pneumonia
+      - Pneumoperitoneum
+      - Pneumothorax
+      - Pulmonary Embolism
+      - Pulmonary Hypertension
+      - Rib Fracture
+      - Round(ed) Atelectasis
+      - Subcutaneous Emphysema
+      - Support Devices
+      - Tortuous Aorta
+      - Tuberculosis
+
+ckpt_path: null
