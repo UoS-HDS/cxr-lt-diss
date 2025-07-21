@@ -7,7 +7,7 @@ from pathlib import Path
 import asyncio
 
 import pydicom
-from pydicom.pixels import apply_voi_lut, apply_modality_lut  # type: ignore
+from pydicom.pixels.processing import apply_voi_lut, apply_modality_lut
 import cv2
 import numpy as np
 from tqdm.asyncio import tqdm
