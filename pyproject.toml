@@ -8,6 +8,7 @@ dependencies = [
     "albumentations>=2.0.8",
     "beautifulsoup4>=4.13.4",
     "einops>=0.8.1",
+    "fvcore>=0.1.5.post20221221",
     "google-cloud-storage>=3.1.0",
     "httpx>=0.28.1",
     "iterative-stratification>=0.1.9",

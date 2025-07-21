@@ -183,3 +183,6 @@ data-resized/
 *sif
 .bash_history
 .venv-local/
+.venv-docker/
+.venv-docker1/
+.tmp/
