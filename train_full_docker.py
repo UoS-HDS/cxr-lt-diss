@@ -10,7 +10,6 @@ Edit src/utils/experiment_config.py to change experiment settings.
 import subprocess
 import signal
 import sys
-import shutil
 import os
 from pathlib import Path
 from typing import Dict, Any
@@ -123,7 +122,7 @@ def wait_for_process_completion(process: subprocess.Popen, job_name: str):
     print(f"Starting {job_name}...")
 
     # Stream output in real-time
-    for line in iter(process.stdout.readline, ""):
+    for line in iter(process.stdout.readline, ""):  # type: ignore
         print(line.rstrip())
 
     # Wait for process to complete
@@ -160,37 +159,6 @@ def run_job(
     wait_for_process_completion(process, job_name)
 
 
-def lock_scripts(config: Dict[str, Any], paths: Dict[str, Path]):
-    """Copy scripts to a timestamped directory in tmp to prevent mid-training updates."""
-    locked_scripts_dir = paths["scripts_backup_dir"]
-
-    print(f"Locking scripts to {locked_scripts_dir}")
-
-    # Create the locked directory
-    locked_scripts_dir.mkdir(parents=True, exist_ok=True)
-
-    # Copy all scripts
-    scripts_dir = paths["scripts_dir"]
-    for script_file in scripts_dir.glob("*.sh"):
-        dest_file = locked_scripts_dir / script_file.name
-        shutil.copy2(script_file, dest_file)
-        # Make executable
-        os.chmod(dest_file, 0o755)
-        print(f"Locked: {script_file} -> {dest_file}")
-
-    return locked_scripts_dir
-
-
-def cleanup_locked_scripts(locked_scripts_dir: Path):
-    """Clean up the locked scripts directory after successful completion."""
-    try:
-        if locked_scripts_dir.exists():
-            shutil.rmtree(locked_scripts_dir)
-            print(f"Cleaned up locked scripts directory: {locked_scripts_dir}")
-    except Exception as e:
-        print(f"Warning: Failed to clean up locked scripts directory: {e}")
-
-
 def setup_experiment(config: Dict[str, Any], paths: Dict[str, Path]):
     """Set up all experiment files and directories"""
 
@@ -220,8 +188,6 @@ def setup_experiment(config: Dict[str, Any], paths: Dict[str, Path]):
 def run_full_pipeline(config: Dict[str, Any], paths: Dict[str, Path]):
     """Run the complete training pipeline"""
 
-    # Lock scripts at startup
-    # locked_scripts_dir = lock_scripts(config, paths)
     SCRIPTS_DIR = paths["scripts_backup_dir"]
 
     # Use locked scripts instead of original ones
@@ -249,7 +215,6 @@ def run_full_pipeline(config: Dict[str, Any], paths: Dict[str, Path]):
     try:
         for idx in range(N_ITER + 1):
             if idx == 0:
-                continue
                 print("INITIAL TRAINING RUN WITH EXISTING LABELS...")
                 run_job(train_script, "Initial Training")
                 continue
@@ -327,13 +292,8 @@ def run_full_pipeline(config: Dict[str, Any], paths: Dict[str, Path]):
 
         print("All jobs completed successfully.")
 
-        # Clean up locked scripts after successful completion
-        # cleanup_locked_scripts(locked_scripts_dir)
-
     except Exception as e:
         print(f"Training failed with error: {e}")
-        # print(f"Locked scripts preserved at: {locked_scripts_dir}")
-        # cleanup_locked_scripts(locked_scripts_dir)
         raise
 
 
@@ -355,7 +315,13 @@ def run_predict_only(config: Dict[str, Any], paths: Dict[str, Path]):
     ckpt = get_best_ckpt(paths["fusion_checkpoint_dir"])
     print(f"Using checkpoint for prediction: {ckpt}")
 
-    run_job(predict_script, "Predicting final labels", ckpt, predict=True)
+    run_job(
+        predict_script,
+        "Predicting final labels",
+        ckpt,
+        predict=True,
+        extras=[paths["fusion_model_path"]],
+    )
 
     print("Prediction completed successfully.")
 
@@ -365,8 +331,7 @@ def main():
     parser = argparse.ArgumentParser(description="Centralized Experiment Runner")
     parser.add_argument(
         "--predict_only",
-        type=bool,
-        default=0,
+        action="store_true",
         help="Whether to run in prediction mode only",
     )
     parser.add_argument(
@@ -450,7 +415,7 @@ def main():
 
     predict_only = getattr(args, "predict_only")
     if predict_only:
-        run_predict_only(config, paths)
+        run_predict_only(config, paths)  # type: ignore
         return
 
     delattr(args, "predict_only")
@@ -459,11 +424,11 @@ def main():
     print("=" * 60)
 
     # Setup experiment
-    setup_experiment(config, paths)
+    setup_experiment(config, paths)  # type: ignore
 
     # Run the full pipeline
     print("\n🏃 Starting training pipeline...")
-    run_full_pipeline(config, paths)
+    run_full_pipeline(config, paths)  # type: ignore
 
     print("\n🎉 Experiment completed successfully!")
     print(f"📁 Results saved to: {paths['submission_dir']}")

@@ -10,9 +10,9 @@ Edit src/utils/experiment_config.py to change experiment settings.
 import subprocess
 import signal
 import sys
-import shutil
 import os
 import re
+import time
 from pathlib import Path
 from typing import Dict, Any
 import argparse
@@ -24,9 +24,7 @@ from src.utils.experiment_config import (
 )
 from src.utils.config_generator import write_config_files
 from src.utils.script_generator_apptainer import write_apptainer_script_files
-from src.utils.directory_manager import (
-    create_experiment_directories,
-)
+from src.utils.directory_manager import create_experiment_directories
 
 
 # Global variable to track running job IDs
@@ -88,24 +86,22 @@ def submit_job(
     os.chmod(script_path, 0o755)
 
     if not ckpt_path:
-        cmd = ["sbatch", "--wait", str(script_path), str(use_pseudo)]
+        cmd = ["sbatch", str(script_path), str(use_pseudo)]
     else:
         if predict and extras:
             cmd = [
                 "sbatch",
-                "--wait",
                 str(script_path),
                 str(ckpt_path),
                 *[str(x) for x in extras],
             ]
         elif predict:
-            cmd = ["sbatch", "--wait", str(script_path), str(ckpt_path)]
+            cmd = ["sbatch", str(script_path), str(ckpt_path)]
         elif not use_pseudo:
-            cmd = ["sbatch", "--wait", str(script_path), str(ckpt_path)]
+            cmd = ["sbatch", str(script_path), str(ckpt_path)]
         else:
             cmd = [
                 "sbatch",
-                "--wait",
                 str(script_path),
                 str(use_pseudo),
                 str(ckpt_path),
@@ -113,7 +109,7 @@ def submit_job(
 
     print(f"Running command: {' '.join(cmd)}")
 
-    # Submit job with --wait to block until completion
+    # Submit job to get job ID
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
@@ -126,9 +122,227 @@ def submit_job(
             f"Could not extract job ID from sbatch output: {result.stdout}"
         )
     job_id = match.group(1)
-    print(f"Job {job_id} completed successfully")
+    print(f"Submitted job {job_id}")
+
+    # Add to tracking list immediately
+    running_job_ids.append(job_id)
 
     return job_id
+
+
+def wait_for_job_completion(job_id: str, job_name: str):
+    """
+    Wait for a SLURM job to start running, then stream its output using sattach.
+    """
+    print(f"Starting {job_name}...")
+
+    # Poll until job starts running
+    print(f"Waiting for job {job_id} to start running...")
+    job_state = "PENDING"  # Initialize job_state
+    while True:
+        result = subprocess.run(
+            ["squeue", "--job", job_id, "--format=%T", "--noheader"],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            # Job might have finished already, check with sacct
+            sacct_result = subprocess.run(
+                ["sacct", "-j", job_id, "--format=State", "--noheader", "--parsable2"],
+                capture_output=True,
+                text=True,
+            )
+            if sacct_result.returncode == 0 and sacct_result.stdout.strip():
+                states = [
+                    s.strip()
+                    for s in sacct_result.stdout.strip().split("\n")
+                    if s.strip()
+                ]
+                if states:
+                    final_state = states[0]
+                    if final_state in ["COMPLETED"]:
+                        print(
+                            f"{job_name} completed before we could attach (Job ID: {job_id})."
+                        )
+                        return
+                    else:
+                        raise RuntimeError(
+                            f"{job_name} failed with state: {final_state} (Job ID: {job_id})"
+                        )
+            break
+
+        job_state = result.stdout.strip()
+        if job_state in ["RUNNING"]:
+            print(f"Job {job_id} is now running. Monitoring output...")
+            break
+        elif job_state in ["PENDING", "CONFIGURING"]:
+            print(f"Job {job_id} status: {job_state}. Waiting...")
+            time.sleep(10)
+        elif job_state in ["COMPLETED", "FAILED", "CANCELLED", "TIMEOUT"]:
+            print(f"Job {job_id} finished with state: {job_state}")
+            break
+        else:
+            print(f"Job {job_id} in unknown state: {job_state}. Continuing...")
+            break
+
+    # If job is running or finished, start tailing output files
+    if job_state in ["RUNNING", "COMPLETED", "FAILED", "CANCELLED", "TIMEOUT"]:
+        # Get actual output file path from SLURM
+        scontrol_result = subprocess.run(
+            ["scontrol", "show", "job", job_id],
+            capture_output=True,
+            text=True,
+        )
+
+        output_file = None
+        if scontrol_result.returncode == 0:
+            # Parse the scontrol output to find StdOut path
+            for line in scontrol_result.stdout.split("\n"):
+                if "StdOut=" in line:
+                    # Extract the path after StdOut=
+                    stdout_match = re.search(r"StdOut=(\S+)", line)
+                    if stdout_match:
+                        output_file = stdout_match.group(1)
+                        break
+
+        if not output_file:
+            # Fallback to standard naming if we can't get it from scontrol
+            output_file = f"slurm-{job_id}.out"
+            print(
+                f"Could not determine output file from scontrol, using default: {output_file}"
+            )
+        else:
+            print(f"Monitoring job {job_id} output file: {output_file}")
+
+        # Tail the output file in real-time
+        tail_process = None
+        try:
+            # Use tail -f to follow the output file
+            tail_process = subprocess.Popen(
+                ["tail", "-f", output_file],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                universal_newlines=True,
+            )
+
+            # Stream output from tail
+            while True:
+                # Check if job is still running
+                result = subprocess.run(
+                    ["squeue", "--job", job_id, "--noheader"],
+                    capture_output=True,
+                    text=True,
+                )
+
+                job_still_running = result.returncode == 0 and result.stdout.strip()
+
+                # If job finished, read any remaining output and exit
+                if not job_still_running:
+                    print(f"Job {job_id} has finished. Reading final output...")
+                    # Read any remaining output from tail
+                    try:
+                        if tail_process.stdout:
+                            # Read all remaining lines
+                            while True:
+                                line = tail_process.stdout.readline()
+                                if not line:
+                                    break
+                                print(line.rstrip())
+                    except Exception:
+                        pass
+                    break
+
+                # Read available output (only if job is still running)
+                if tail_process.stdout:
+                    try:
+                        # Use select to check if data is available (non-blocking)
+                        import select
+
+                        if select.select([tail_process.stdout], [], [], 1)[0]:
+                            line = tail_process.stdout.readline()
+                            if line:
+                                print(line.rstrip())
+                    except Exception:
+                        # Fallback if select doesn't work
+                        pass
+
+                time.sleep(1)
+
+        except FileNotFoundError:
+            print(
+                f"Output file {output_file} not found. Monitoring job status instead..."
+            )
+            # Fallback: monitor job status without output
+            while True:
+                result = subprocess.run(
+                    ["squeue", "--job", job_id, "--noheader"],
+                    capture_output=True,
+                    text=True,
+                )
+
+                if result.returncode != 0 or not result.stdout.strip():
+                    break
+
+                print(f"Job {job_id} still running...")
+                time.sleep(30)
+
+        except Exception as e:
+            print(f"Error tailing output file: {e}")
+            # Fallback: monitor job status without output
+            while True:
+                result = subprocess.run(
+                    ["squeue", "--job", job_id, "--noheader"],
+                    capture_output=True,
+                    text=True,
+                )
+
+                if result.returncode != 0 or not result.stdout.strip():
+                    break
+
+                print(f"Job {job_id} still running...")
+                time.sleep(30)
+
+        finally:
+            # Clean up tail process
+            if tail_process and tail_process.poll() is None:
+                tail_process.terminate()
+                try:
+                    tail_process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    tail_process.kill()
+
+    try:
+        # Check final job status
+        sacct_result = subprocess.run(
+            ["sacct", "-j", job_id, "--format=State", "--noheader", "--parsable2"],
+            capture_output=True,
+            text=True,
+        )
+
+        if sacct_result.returncode == 0:
+            states = [
+                s.strip() for s in sacct_result.stdout.strip().split("\n") if s.strip()
+            ]
+            if states:
+                final_state = states[0]
+                if final_state in ["COMPLETED"]:
+                    print(f"{job_name} completed successfully (Job ID: {job_id}).")
+                    return
+                else:
+                    raise RuntimeError(
+                        f"{job_name} failed with state: {final_state} (Job ID: {job_id})"
+                    )
+
+        # If we can't determine status, assume success
+        print(f"{job_name} completed (Job ID: {job_id}).")
+
+    finally:
+        # Remove from tracking list
+        if job_id in running_job_ids:
+            running_job_ids.remove(job_id)
 
 
 def run_job(
@@ -140,10 +354,8 @@ def run_job(
     extras: list[str | Path] = [],
 ):
     """
-    Run a job and wait for completion using sbatch --wait.
+    Run a SLURM job and wait for completion, with proper job tracking for cancellation.
     """
-    print(f"Starting {job_name}...")
-
     job_id = submit_job(
         script_path=script_path,
         ckpt_path=ckpt_path,
@@ -152,39 +364,7 @@ def run_job(
         extras=extras,
     )
 
-    print(f"{job_name} completed successfully (Job ID: {job_id}).")
-
-
-def lock_scripts(config: Dict[str, Any], paths: Dict[str, Path]):
-    """Copy scripts to a timestamped directory in tmp to prevent mid-training updates."""
-    locked_scripts_dir = paths["scripts_backup_dir"]
-
-    print(f"Locking scripts to {locked_scripts_dir}")
-
-    # Create the locked directory
-    locked_scripts_dir.mkdir(parents=True, exist_ok=True)
-
-    # Copy all scripts
-    scripts_dir = paths["scripts_dir"]
-    if scripts_dir.exists():
-        for script_file in scripts_dir.glob("*.sh"):
-            dest_file = locked_scripts_dir / script_file.name
-            shutil.copy2(script_file, dest_file)
-            # Make executable
-            os.chmod(dest_file, 0o755)
-            print(f"Locked: {script_file} -> {dest_file}")
-
-    return locked_scripts_dir
-
-
-def cleanup_locked_scripts(locked_scripts_dir: Path):
-    """Clean up the locked scripts directory after successful completion."""
-    try:
-        if locked_scripts_dir.exists():
-            shutil.rmtree(locked_scripts_dir)
-            print(f"Cleaned up locked scripts directory: {locked_scripts_dir}")
-    except Exception as e:
-        print(f"Warning: Failed to clean up locked scripts directory: {e}")
+    wait_for_job_completion(job_id, job_name)
 
 
 def validate_apptainer_config(config: Dict[str, Any]) -> None:
@@ -352,12 +532,8 @@ def run_full_pipeline(config: Dict[str, Any], paths: Dict[str, Path]):
 
         print("All jobs completed successfully.")
 
-        # Clean up locked scripts after successful completion
-        # cleanup_locked_scripts(SCRIPTS_DIR)
-
     except Exception as e:
         print(f"Training failed with error: {e}")
-        # print(f"Locked scripts preserved at: {SCRIPTS_DIR}")
         raise
 
 
@@ -378,7 +554,13 @@ def run_predict_only(config: Dict[str, Any], paths: Dict[str, Path]):
     ckpt = get_best_ckpt(paths["fusion_checkpoint_dir"])
     print(f"Using checkpoint for prediction: {ckpt}")
 
-    run_job(predict_script, "Predicting final labels", ckpt, predict=True)
+    run_job(
+        predict_script,
+        "Predicting final labels",
+        ckpt,
+        predict=True,
+        extras=[paths["fusion_model_path"]],
+    )
 
     print("Prediction completed successfully.")
 
@@ -487,7 +669,7 @@ def main():
     paths = get_experiment_paths(config, "apptainer")
 
     if args.predict_only:
-        run_predict_only(config, paths)
+        run_predict_only(config, paths)  # type: ignore
         return
 
     print("=" * 60)
@@ -495,11 +677,11 @@ def main():
     print("=" * 60)
 
     # Setup experiment
-    setup_experiment(config, paths)
+    setup_experiment(config, paths)  # type: ignore
 
     # Run the full pipeline
     print("\n🏃 Starting training pipeline...")
-    run_full_pipeline(config, paths)
+    run_full_pipeline(config, paths)  # type: ignore
 
     print("\n🎉 Experiment completed successfully!")
     print(f"📁 Results saved to: {paths['submission_dir']}")
