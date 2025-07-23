@@ -187,6 +187,7 @@ def generate_main_config(
                 "nih_pseudo_train_df_path": str(paths["nih_pseudo_path"]),
                 "chexpert_train_df_path": "data/chexpert/CheXpert-v1.0/train_expanded.csv",
                 "chexpert_pseudo_train_df_path": str(paths["chexpert_pseudo_path"]),
+                "pred_df_path": str(paths["pred_df_path"]),
                 "val_split": 0.1,
                 "seed": 8089,
                 "size": config["image_size"],
@@ -288,29 +289,24 @@ def generate_stage2_pred_config(
     """Generate stage-2 prediction config"""
     base_config = generate_stage2_config(config, paths)
     task = config["task"]
-    predict_type = config.get("predict_type", "dev")
-
-    predict_df_dir = Path("data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/")
-    if predict_type == "dev":
-        predict_df_path = predict_df_dir / f"development_labeled_{task}.csv"
-    else:
-        predict_df_path = predict_df_dir / f"test_labeled_{task}.csv"
+    pred_file = "preds" if config["predict_type"] == "dev" else "preds_test"
 
     # Add prediction callback
     prediction_callback = {
         "class_path": f"src.callbacks.{task}_callback.{task.capitalize()}SubmissionWriter",
         "init_args": {
             "sample_submit_path": "data/sample_submission.csv",
-            "submit_path": str(paths["submission_dir"] / "preds.csv"),
-            "submit_zip_path": str(paths["submission_dir"] / "preds.zip"),
+            "submit_path": str(paths["submission_dir"] / f"{pred_file}.csv"),
+            "submit_zip_path": str(paths["submission_dir"] / f"{pred_file}.zip"),
             "submit_code_dir": str(paths["submission_dir"] / "code"),
-            "pred_df_path": str(predict_df_path),
+            "pred_df_path": str(paths["pred_df_path"]),
             "write_interval": "epoch",
         },
     }
     base_config["trainer"]["callbacks"].append(prediction_callback)
     base_config["model"]["skip_predict_metrics"] = False
     base_config["model"]["conf_matrix_path"] = str(paths["conf_matrix_path"])
+    base_config["data"]["datamodule_cfg"]["pred_df_path"] = str(paths["pred_df_path"])
 
     return base_config
 

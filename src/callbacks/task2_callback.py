@@ -6,7 +6,7 @@ import pandas as pd
 from lightning.pytorch.callbacks import BasePredictionWriter
 
 
-class Task2SubmissonWriter(BasePredictionWriter):
+class Task2SubmissionWriter(BasePredictionWriter):
     def __init__(
         self,
         sample_submit_path,
@@ -29,7 +29,10 @@ class Task2SubmissonWriter(BasePredictionWriter):
     def write_on_epoch_end(self, trainer, pl_module, predictions, batch_indices):
         # Add predictions
         predictions = torch.cat(predictions, dim=0)  # type: ignore
-        torch.save(predictions, self.submit_path.parent / "predictions.pt")
+        predictions_name = (
+            "predictions_test" if "test" in self.submit_path.name else "predictions"
+        )
+        torch.save(predictions, self.submit_path.parent / f"{predictions_name}.pt")
 
         # submit_df = pd.read_csv(self.sample_submit_path)
         pred_df = pd.read_csv(self.pred_df_path)

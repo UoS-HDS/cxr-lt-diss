@@ -141,6 +141,10 @@ def generate_predict_final_script(
 ) -> str:
     """Generate predict_final.sh script"""
     gpu_config = get_gpu_config(config)
+    if config["predict_type"] == "dev":
+        res_file = "results"
+    else:
+        res_file = "results_test"
 
     return f"""#!/bin/bash
 
@@ -169,7 +173,7 @@ CUDA_VISIBLE_DEVICES={gpu_config["predict_cuda_devices"]} docker run --rm --gpus
     -e UV_PROJECT_ENVIRONMENT=/opt/venv/ \\
     pytorch_24.08-py3-uv \\
     bash -c "set -e; \\
-    $cmd > {paths["submission_dir"]}/results.txt"
+    $cmd > {paths["submission_dir"]}/{res_file}.txt"
 
 # Check if docker command succeeded
 if [ $? -ne 0 ]; then

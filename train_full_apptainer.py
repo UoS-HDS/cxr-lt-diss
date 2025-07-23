@@ -666,11 +666,16 @@ def main():
         if value is not None and key != "predict_only":
             config[key] = value
 
-    paths = get_experiment_paths(config, "apptainer")
+    predict_type = config.get("predict_type", "dev")
 
-    if args.predict_only:
-        run_predict_only(config, paths)  # type: ignore
-        return
+    pred_df_dir = Path("data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/")
+    if predict_type == "dev":
+        pred_df_path = pred_df_dir / f"development_labeled_{config['task']}.csv"
+    else:
+        pred_df_path = pred_df_dir / f"test_labeled_{config['task']}.csv"
+
+    config["pred_df_path"] = str(pred_df_path)
+    paths = get_experiment_paths(config, "apptainer")
 
     print("=" * 60)
     print("🎯 CENTRALIZED EXPERIMENT RUNNER (APPTAINER/SLURM)")
@@ -678,6 +683,10 @@ def main():
 
     # Setup experiment
     setup_experiment(config, paths)  # type: ignore
+
+    if args.predict_only:
+        run_predict_only(config, paths)  # type: ignore
+        return
 
     # Run the full pipeline
     print("\n🏃 Starting training pipeline...")

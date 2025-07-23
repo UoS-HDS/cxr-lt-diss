@@ -51,6 +51,7 @@ def get_experiment_paths(config: Dict[str, Any], runtime: str) -> Dict[str, Path
     exp_name = generate_experiment_name(config)
     image_size = config["image_size"]
     task = config["task"]
+    conf_matrix_name = "conf_matrix" if config["predict_type"] == "dev" else "conf_matrix_test"
 
     return {
         # Experiment name
@@ -68,7 +69,7 @@ def get_experiment_paths(config: Dict[str, Any], runtime: str) -> Dict[str, Path
         # Logging and outputs
         "tb_log_dir": Path(f".out/tb/{image_size}"),
         "submission_dir": Path(f"submissions/{task}/{exp_name}"),
-        "conf_matrix_path": Path(f"submissions/{task}/{exp_name}/conf_matrix.svg"),
+        "conf_matrix_path": Path(f"submissions/{task}/{exp_name}/{conf_matrix_name}.svg"),
         # Pseudo-labels
         "pseudo_label_dir": Path(f".tmp/pseudolabels/{exp_name}"),
         "chexpert_pseudo_path": Path(
@@ -80,6 +81,7 @@ def get_experiment_paths(config: Dict[str, Any], runtime: str) -> Dict[str, Path
         "nih_pseudo_path": Path(
             f".tmp/pseudolabels/{exp_name}/nih/train_expanded_pseudo.csv"
         ),
+        "pred_df_path": Path(config["pred_df_path"]),
         "config_dir": Path(f"configs/{task}"),
         # Backup directories
         "config_backup_dir": Path(f".tmp/configs/{exp_name}"),

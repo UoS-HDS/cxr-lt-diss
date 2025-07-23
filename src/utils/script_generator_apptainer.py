@@ -172,7 +172,11 @@ def _generate_predict_final_script(
     project_dir = config["project_dir"]
     apptainer_image = config["apptainer_image"]
     config_path = paths["config_backup_dir"] / "config-stage-2-pred.yaml"
-    submission_path = paths["submission_dir"] / "results.txt"
+    if config["predict_type"] == "dev":
+        res_file = "results"
+    else:
+        res_file = "results_test"
+    submission_path = paths["submission_dir"] / res_file
 
     return f"""{slurm_header}
 set -e
