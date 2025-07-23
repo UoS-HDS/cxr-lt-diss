@@ -13,6 +13,7 @@ CURRENT_EXPERIMENT = {
     "model_type": "medvit",  # convnext, medvit, vit
     "model_name": "medvit",  # medvit, convnext_small.fb_in22k_ft_in1k_384
     "embedding": None,  # pubmedbert, umlsbert, None
+    "zsl": 0,  # 0 for no ZSL, 1 for ZSL
     "loss_type": "asl",  # asl, ral
     "image_size": 1024,
     "lr": 5e-5,
@@ -45,7 +46,7 @@ def generate_experiment_name(config: Dict[str, Any]) -> str:
     return name
 
 
-def get_experiment_paths(config: Dict[str, Any], runtime: str) -> Dict[str, Path]:
+def get_experiment_paths(config: Dict[str, Any], runtime: str) -> Dict[str, Path | str]:
     """Generate all paths for an experiment"""
     exp_name = generate_experiment_name(config)
     image_size = config["image_size"]

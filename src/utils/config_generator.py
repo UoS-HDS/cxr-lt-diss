@@ -67,6 +67,8 @@ def generate_main_config(
         },
         "model": {
             "lr": config["lr"],
+            "embedding": config["embedding"],
+            "zsl": config["zsl"],
             "classes": [
                 "Adenopathy",
                 "Atelectasis",

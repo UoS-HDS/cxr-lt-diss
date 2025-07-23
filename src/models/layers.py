@@ -4,6 +4,7 @@ https://github.com/dongkyunk/CheXFusion/blob/main/model/layers.py
 """
 
 from pathlib import Path
+from typing import Any
 
 import torch
 import timm
@@ -15,7 +16,7 @@ import einops
 from positional_encodings.torch_encodings import PositionalEncoding2D, Summer
 
 from src.models.ml_decoder import MLDecoder
-from src.util import get_model
+from src.utils import get_model, get_label_embeddings
 
 
 class Backbone(nn.Module):
@@ -24,19 +25,21 @@ class Backbone(nn.Module):
     def __init__(
         self,
         model_type: str,
-        model_init_args: dict,
+        model_init_args: dict[str, Any],
+        classes: list[str],
+        embedding: str | None = None,
         zsl: int = 0,
         target_dim: int = 768,
-        enable_checkpointing: bool = True,
+        # enable_checkpointing: bool = True,
     ):
         super().__init__()
         self.model = get_model(model_type, model_init_args)
         self.model.head = nn.Identity()
-        self.enable_checkpointing = enable_checkpointing
+        # self.enable_checkpointing = enable_checkpointing
 
-        # Enable gradient checkpointing for ConvNeXt if available
-        if hasattr(self.model, "set_grad_checkpointing") and enable_checkpointing:
-            self.model.set_grad_checkpointing(True)
+        # # Enable gradient checkpointing for ConvNeXt if available
+        # if hasattr(self.model, "set_grad_checkpointing") and enable_checkpointing:
+        #     self.model.set_grad_checkpointing(True)
 
         # Auto-detect input dimensions
         with torch.no_grad():
@@ -53,11 +56,20 @@ class Backbone(nn.Module):
             self.projection = nn.Identity()
 
         self.pos_encoding = Summer(PositionalEncoding2D(target_dim))
-        self.head = MLDecoder(
-            num_classes=model_init_args["num_classes"],
-            initial_num_features=target_dim,
-            zsl=zsl,
-        )
+        if embedding is not None:
+            embeddings = get_label_embeddings(embedding, classes)
+            self.head = MLDecoder(
+                num_classes=model_init_args["num_classes"],
+                initial_num_features=target_dim,
+                zsl=zsl,
+                embeddings=embeddings,
+            )
+        else:
+            self.head = MLDecoder(
+                num_classes=model_init_args["num_classes"],
+                initial_num_features=target_dim,
+                zsl=zsl,
+            )
 
     def forward(self, x):
         x = self.model(x)
@@ -79,20 +91,22 @@ class FusionBackbone(nn.Module):
     def __init__(
         self,
         model_type: str,
-        model_init_args: dict,
+        model_init_args: dict[str, Any],
+        classes: list[str],
+        embedding: str | None = None,
         zsl: int = 0,
-        pretrained_path: str | Path | None = None,
         target_dim: int = 768,
-        enable_checkpointing: bool = True,
+        pretrained_path: str | Path | None = None,
+        # enable_checkpointing: bool = True,
     ):
         super().__init__()
         self.model = get_model(model_type, model_init_args)
         self.model.head = nn.Identity()
-        self.enable_checkpointing = enable_checkpointing
+        # self.enable_checkpointing = enable_checkpointing
 
-        # Enable gradient checkpointing for ConvNeXt if available
-        if hasattr(self.model, "set_grad_checkpointing") and enable_checkpointing:
-            self.model.set_grad_checkpointing(True)
+        # # Enable gradient checkpointing for ConvNeXt if available
+        # if hasattr(self.model, "set_grad_checkpointing") and enable_checkpointing:
+        #     self.model.set_grad_checkpointing(True)
 
         # Auto-detect input dimensions
         with torch.no_grad():
@@ -119,11 +133,20 @@ class FusionBackbone(nn.Module):
         self.padding_token = nn.Parameter(torch.randn(1, target_dim, 1, 1))
         self.segment_embedding = nn.Parameter(torch.randn(4, target_dim, 1, 1))
 
-        self.head = MLDecoder(
-            num_classes=model_init_args["num_classes"],
-            initial_num_features=target_dim,
-            zsl=zsl,
-        )
+        if embedding is not None:
+            embeddings = get_label_embeddings(embedding, classes)
+            self.head = MLDecoder(
+                num_classes=model_init_args["num_classes"],
+                initial_num_features=target_dim,
+                zsl=zsl,
+                embeddings=embeddings,
+            )
+        else:
+            self.head = MLDecoder(
+                num_classes=model_init_args["num_classes"],
+                initial_num_features=target_dim,
+                zsl=zsl,
+            )
         self.transformer_encoder = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(d_model=target_dim, nhead=8),
             num_layers=2,

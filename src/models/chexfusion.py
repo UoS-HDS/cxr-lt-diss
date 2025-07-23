@@ -32,9 +32,10 @@ class CxrModel(LightningModule):
         self,
         lr: float,
         classes: list[str],
-        loss_init_args: dict,
+        loss_init_args: dict[str, Any],
         model_type: str,
-        model_init_args: dict,
+        model_init_args: dict[str, Any],
+        embedding: str | None = None,
         zsl: int = 0,
         skip_predict_metrics: bool = True,
         conf_matrix_path: str | None = None,
@@ -52,7 +53,13 @@ class CxrModel(LightningModule):
         self.lr = lr
         self.classes = classes
         self.num_classes = len(classes)
-        self.backbone = Backbone(model_type, model_init_args, zsl=zsl)
+        self.backbone = Backbone(
+            model_type=model_type,
+            model_init_args=model_init_args,
+            classes=classes,
+            embedding=embedding,
+            zsl=zsl,
+        )
         self.skip_predict_metrics = skip_predict_metrics
         self.conf_matrix_path = conf_matrix_path
 
@@ -275,10 +282,12 @@ class CxrModelFusion(CxrModel):
         lr: float,
         classes: list[str],
         loss_init_args: dict[str, Any],
-        model_init_args: dict[str, Any],
         model_type: str,
+        model_init_args: dict[str, Any],
+        embedding: str | None = None,
         zsl: int = 0,
         skip_predict_metrics: bool = True,
+        conf_matrix_path: str | None = None,
         pretrained_path: str | None = None,
     ):
         super().__init__(
@@ -287,12 +296,19 @@ class CxrModelFusion(CxrModel):
             loss_init_args,
             model_type,
             model_init_args,
+            embedding,
             zsl,
             skip_predict_metrics,
+            conf_matrix_path,
         )
         print(f"Using pretrained backbone: {pretrained_path}")
         self.backbone = FusionBackbone(
-            model_type, model_init_args, zsl, pretrained_path
+            model_type=model_type,
+            model_init_args=model_init_args,
+            classes=classes,
+            embedding=embedding,
+            zsl=zsl,
+            pretrained_path=pretrained_path,
         )
 
 

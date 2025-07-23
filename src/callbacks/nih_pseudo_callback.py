@@ -11,7 +11,7 @@ import torch
 import pandas as pd
 from lightning.pytorch.callbacks import BasePredictionWriter
 
-from src.util import flatten
+from src.utils import flatten
 
 
 class NIHWriter(BasePredictionWriter):

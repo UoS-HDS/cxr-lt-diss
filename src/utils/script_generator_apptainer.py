@@ -30,7 +30,9 @@ def _generate_train_backbone_script(
     task = config["task"]
     job_name = f"train_backbone_{task}"
     gpu_count = int(config["gpu_count"])
-    slurm_header = _get_slurm_header(job_name, gpu_count)
+    mem = config["mem"]
+    partition = config["partition"]
+    slurm_header = _get_slurm_header(job_name, gpu_count, mem=mem, partition=partition)
     project_dir = config["project_dir"]
     apptainer_image = config["apptainer_image"]
     config_path = paths["config_backup_dir"] / "config.yaml"
@@ -54,6 +56,7 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 
 apptainer exec --nv \\
     --bind "$project_dir":"$project_dir" \\
+    --env UV_PROJECT_ENVIRONMENT=.venv-apptainer \\
     {apptainer_image} \\
     bash -c "uv sync -q && eval \\"$cmd\\""
 
@@ -97,6 +100,7 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 
 apptainer exec --nv \\
     --bind "$project_dir":"$project_dir" \\
+    --env UV_PROJECT_ENVIRONMENT=.venv-apptainer \\
     {apptainer_image} \\
     bash -c "set -e; \\
     uv sync -q && \\
@@ -143,6 +147,7 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 
 apptainer exec --nv \\
     --bind "$project_dir":"$project_dir" \\
+    --env UV_PROJECT_ENVIRONMENT=.venv-apptainer \\
     {apptainer_image} \\
     bash -c "uv sync -q && $cmd"
 
@@ -186,6 +191,7 @@ cmd="STAGE=2 uv run --python 3.12.9 main.py predict --config {config_path} --ckp
 
 apptainer exec --nv \\
     --bind "$project_dir":"$project_dir" \\
+    --env UV_PROJECT_ENVIRONMENT=.venv-apptainer \\
     {apptainer_image} \\
     bash -c "uv sync -q && $cmd > {submission_path}"
 
@@ -214,8 +220,7 @@ def write_apptainer_script_files(
         "predict_final.sh": _generate_predict_final_script(config, paths),
     }
 
-    for filename, generator_func in scripts_to_generate.items():
-        script_content = generator_func(config, paths)
+    for filename, script_content in scripts_to_generate.items():
         with open(script_dir / filename, "w") as f:
             f.write(script_content)
         # Make script executable

@@ -167,22 +167,32 @@ class MLDecoder(nn.Module):
         decoder_embedding=768,
         initial_num_features=2048,
         zsl=0,
+        embeddings: Tensor | None = None,
     ):
         super().__init__()
         embed_len_decoder = 100 if num_of_groups < 0 else num_of_groups
         if embed_len_decoder > num_classes:
             embed_len_decoder = num_classes
 
+        if embeddings is None and zsl == 1:
+            raise ValueError("Embeddings must be provided in zero-shot learning mode")
+
         # switching to 768 initial embeddings
         decoder_embedding = 768 if decoder_embedding < 0 else decoder_embedding
         embed_standart = nn.Linear(initial_num_features, decoder_embedding)
 
         # non-learnable queries
-        if not zsl:
+        # if not zsl:
+        #     query_embed = nn.Embedding(embed_len_decoder, decoder_embedding)
+        #     query_embed.requires_grad_(False)
+        # else:
+        #     query_embed = nn.Parameter(embeddings, requires_grad=False) if embeddings else None
+
+        if embeddings is None:
             query_embed = nn.Embedding(embed_len_decoder, decoder_embedding)
             query_embed.requires_grad_(False)
         else:
-            query_embed = None
+            query_embed = nn.Parameter(embeddings, requires_grad=False)
 
         # decoder
         decoder_dropout = 0.1
@@ -200,6 +210,7 @@ class MLDecoder(nn.Module):
         self.decoder.embed_standart = embed_standart
         self.decoder.query_embed = query_embed
         self.zsl = zsl
+        self.use_embeddings = embeddings is not None
 
         if self.zsl:
             if decoder_embedding != 300:
@@ -246,7 +257,10 @@ class MLDecoder(nn.Module):
                 self.wordvec_proj(self.decoder.query_embed)
             )
         else:
-            query_embed = self.decoder.query_embed.weight
+            if self.use_embeddings:
+                query_embed = self.decoder.query_embed
+            else:
+                query_embed = self.decoder.query_embed.weight
         # tgt = query_embed.unsqueeze(1).repeat(1, bs, 1)
         # no allocation of memory with expand
         tgt = query_embed.unsqueeze(1).expand(-1, bs, -1)
