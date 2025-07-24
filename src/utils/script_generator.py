@@ -13,6 +13,7 @@ def generate_train_backbone_script(
 ) -> str:
     """Generate train_backbone.sh script"""
     gpu_config = get_gpu_config(config)
+    docker_image = config["docker_image"]
 
     return f"""#!/bin/bash
 set -e
@@ -35,7 +36,10 @@ CUDA_VISIBLE_DEVICES={gpu_config["train_cuda_devices"]} docker run --rm --gpus '
     -v "$project_dir":"$project_dir" \\
     -w "$project_dir" \\
     -e UV_PROJECT_ENVIRONMENT=/opt/venv/ \\
-    pytorch_24.08-py3-uv \\
+    -e NCCL_DEBUG=INFO \\
+    -e NCCL_IB_DISABLE=1 \\
+    -e NCCL_P2P_DISABLE=1 \\
+    {docker_image} \\
     bash -c "set -e; eval \\"$cmd\\"" 2>&1 | tee logs/docker_${{TIMESTAMP}}.log
 
 # Check if docker command succeeded
@@ -54,6 +58,7 @@ def generate_predict_pseudo_labels_script(
 ) -> str:
     """Generate predict_pseudo_labels.sh script"""
     gpu_config = get_gpu_config(config)
+    docker_image = config["docker_image"]
 
     return f"""#!/bin/bash
 
@@ -76,7 +81,7 @@ CUDA_VISIBLE_DEVICES={gpu_config["predict_cuda_devices"]} docker run --rm --gpus
     -v "$project_dir":"$project_dir" \\
     -w "$project_dir" \\
     -e UV_PROJECT_ENVIRONMENT=/opt/venv/ \\
-    pytorch_24.08-py3-uv \\
+    {docker_image} \\
     bash -c "set -e; \\
     STAGE=1 uv run --python 3.12.9 main.py predict --config {paths["config_backup_dir"]}/config.yaml \\
       --data.datamodule_cfg.predict_pseudo_label chexpert \\
@@ -100,6 +105,7 @@ echo "Job complete"
 def generate_train_fusion_script(config: Dict[str, Any], paths: Dict[str, Path]) -> str:
     """Generate train_fusion.sh script"""
     gpu_config = get_gpu_config(config)
+    docker_image = config["docker_image"]
 
     return f"""#!/bin/bash
 
@@ -122,7 +128,10 @@ CUDA_VISIBLE_DEVICES={gpu_config["train_cuda_devices"]} docker run --rm --gpus '
     -v "/mnt/isilon1/$USER/hds-diss/":"/mnt/isilon1/$USER/hds-diss/" \\
     -w "/mnt/isilon1/$USER/hds-diss/" \\
     -e UV_PROJECT_ENVIRONMENT=/opt/venv/ \\
-    pytorch_24.08-py3-uv \\
+    -e NCCL_DEBUG=INFO \\
+    -e NCCL_IB_DISABLE=1 \\
+    -e NCCL_P2P_DISABLE=1 \\
+    {docker_image} \\
     bash -c "set -e; $cmd" 2>&1 | tee logs/docker_${{TIMESTAMP}}.log
 
 # Check if docker command succeeded
@@ -141,6 +150,7 @@ def generate_predict_final_script(
 ) -> str:
     """Generate predict_final.sh script"""
     gpu_config = get_gpu_config(config)
+    docker_image = config["docker_image"]
     if config["predict_type"] == "dev":
         res_file = "results"
     else:
@@ -171,7 +181,7 @@ CUDA_VISIBLE_DEVICES={gpu_config["predict_cuda_devices"]} docker run --rm --gpus
     -v "$project_dir":"$project_dir" \\
     -w "$project_dir" \\
     -e UV_PROJECT_ENVIRONMENT=/opt/venv/ \\
-    pytorch_24.08-py3-uv \\
+    {docker_image} \\
     bash -c "set -e; \\
     $cmd > {paths["submission_dir"]}/{res_file}.txt"
 

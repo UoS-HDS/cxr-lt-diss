@@ -40,6 +40,11 @@ def _generate_train_backbone_script(
     return f"""{slurm_header}
 set -e
 
+export MASTER_ADDR=127.0.0.1
+export MASTER_PORT=$(shuf -i 10000-20000 -n 1)
+export NCCL_IB_DISABLE=1
+export NCCL_P2P_DISABLE=1
+
 use_pseudo="$1"
 ckpt_path="$2"
 project_dir="{project_dir}"
@@ -57,6 +62,10 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 apptainer exec --nv \\
     --bind "$project_dir":"$project_dir" \\
     --env UV_PROJECT_ENVIRONMENT=.venv-apptainer \\
+    --env MASTER_PORT=$MASTER_PORT \\
+    --env NCCL_DEBUG=INFO \\
+    --env NCCL_IB_DISABLE=1 \\
+    --env NCCL_P2P_DISABLE=1 \\
     {apptainer_image} \\
     bash -c "uv sync -q && eval \\"$cmd\\""
 
@@ -87,6 +96,9 @@ def _generate_predict_pseudo_script(
     return f"""{slurm_header}
 set -e
 
+export MASTER_ADDR=127.0.0.1
+export MASTER_PORT=$(shuf -i 10000-20000 -n 1)
+
 ckpt_path="$1"
 project_dir="{project_dir}"
 
@@ -101,6 +113,7 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 apptainer exec --nv \\
     --bind "$project_dir":"$project_dir" \\
     --env UV_PROJECT_ENVIRONMENT=.venv-apptainer \\
+    --env MASTER_PORT=$MASTER_PORT \\
     {apptainer_image} \\
     bash -c "set -e; \\
     uv sync -q && \\
@@ -133,6 +146,11 @@ def _generate_train_fusion_script(
     return f"""{slurm_header}
 set -e
 
+export MASTER_ADDR=127.0.0.1
+export MASTER_PORT=$(shuf -i 10000-20000 -n 1)
+export NCCL_IB_DISABLE=1
+export NCCL_P2P_DISABLE=1
+
 backbone_path="$1"
 project_dir="{project_dir}"
 
@@ -148,6 +166,10 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 apptainer exec --nv \\
     --bind "$project_dir":"$project_dir" \\
     --env UV_PROJECT_ENVIRONMENT=.venv-apptainer \\
+    --env MASTER_PORT=$MASTER_PORT \\
+    --env NCCL_DEBUG=INFO \\
+    --env NCCL_IB_DISABLE=1 \\
+    --env NCCL_P2P_DISABLE=1 \\
     {apptainer_image} \\
     bash -c "uv sync -q && $cmd"
 
@@ -181,6 +203,9 @@ def _generate_predict_final_script(
     return f"""{slurm_header}
 set -e
 
+export MASTER_ADDR=127.0.0.1
+export MASTER_PORT=$(shuf -i 10000-20000 -n 1)
+
 ckpt_path="$1"
 backbone_path="$2"
 project_dir="{project_dir}"
@@ -196,6 +221,7 @@ cmd="STAGE=2 uv run --python 3.12.9 main.py predict --config {config_path} --ckp
 apptainer exec --nv \\
     --bind "$project_dir":"$project_dir" \\
     --env UV_PROJECT_ENVIRONMENT=.venv-apptainer \\
+    --env MASTER_PORT=$MASTER_PORT \\
     {apptainer_image} \\
     bash -c "uv sync -q && $cmd > {submission_path}"
 

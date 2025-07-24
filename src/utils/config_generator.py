@@ -50,7 +50,7 @@ def generate_main_config(
                     "init_args": {
                         "monitor": "val_ap",
                         "mode": "max",
-                        "patience": 5,
+                        "patience": 10,
                         "min_delta": 0.002,
                     },
                 },
