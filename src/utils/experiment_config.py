@@ -37,11 +37,12 @@ def generate_experiment_name(config: Dict[str, Any]) -> str:
     loss = config["loss_type"]  # asl or ral
     size = config["image_size"]  # 1024, 384, etc.
     embedding = config["embedding"]  # pubmedbert, umlsbert, None
+    lr = config["lr"]  # Learning rate
 
     if embedding:
-        name = f"{model_short}+{loss}+{size}+{embedding}"
+        name = f"{model_short}+{loss}+{size}+{embedding}+{lr:.0e}"
     else:
-        name = f"{model_short}+{loss}+{size}"
+        name = f"{model_short}+{loss}+{size}+{lr:.0e}"
 
     return name
 
