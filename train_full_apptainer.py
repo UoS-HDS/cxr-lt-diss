@@ -130,219 +130,122 @@ def submit_job(
     return job_id
 
 
-def wait_for_job_completion(job_id: str, job_name: str):
-    """
-    Wait for a SLURM job to start running, then stream its output using sattach.
-    """
-    print(f"Starting {job_name}...")
+def poll_job_status(job_id: str) -> str:
+    """Poll the job status using squeue and sacct."""
+    result = subprocess.run(
+        ["squeue", "--job", job_id, "--format=%T", "--noheader"],
+        capture_output=True,
+        text=True,
+    )
 
-    # Poll until job starts running
-    print(f"Waiting for job {job_id} to start running...")
-    job_state = "PENDING"  # Initialize job_state
-    while True:
-        result = subprocess.run(
-            ["squeue", "--job", job_id, "--format=%T", "--noheader"],
-            capture_output=True,
-            text=True,
-        )
-
-        if result.returncode != 0:
-            # Job might have finished already, check with sacct
-            sacct_result = subprocess.run(
-                ["sacct", "-j", job_id, "--format=State", "--noheader", "--parsable2"],
-                capture_output=True,
-                text=True,
-            )
-            if sacct_result.returncode == 0 and sacct_result.stdout.strip():
-                states = [
-                    s.strip()
-                    for s in sacct_result.stdout.strip().split("\n")
-                    if s.strip()
-                ]
-                if states:
-                    final_state = states[0]
-                    if final_state in ["COMPLETED"]:
-                        print(
-                            f"{job_name} completed before we could attach (Job ID: {job_id})."
-                        )
-                        return
-                    else:
-                        raise RuntimeError(
-                            f"{job_name} failed with state: {final_state} (Job ID: {job_id})"
-                        )
-            break
-
-        job_state = result.stdout.strip()
-        if job_state in ["RUNNING"]:
-            print(f"Job {job_id} is now running. Monitoring output...")
-            break
-        elif job_state in ["PENDING", "CONFIGURING"]:
-            print(f"Job {job_id} status: {job_state}. Waiting...")
-            time.sleep(10)
-        elif job_state in ["COMPLETED", "FAILED", "CANCELLED", "TIMEOUT"]:
-            print(f"Job {job_id} finished with state: {job_state}")
-            break
-        else:
-            print(f"Job {job_id} in unknown state: {job_state}. Continuing...")
-            break
-
-    # If job is running or finished, start tailing output files
-    if job_state in ["RUNNING", "COMPLETED", "FAILED", "CANCELLED", "TIMEOUT"]:
-        # Get actual output file path from SLURM
-        scontrol_result = subprocess.run(
-            ["scontrol", "show", "job", job_id],
-            capture_output=True,
-            text=True,
-        )
-
-        output_file = None
-        if scontrol_result.returncode == 0:
-            # Parse the scontrol output to find StdOut path
-            for line in scontrol_result.stdout.split("\n"):
-                if "StdOut=" in line:
-                    # Extract the path after StdOut=
-                    stdout_match = re.search(r"StdOut=(\S+)", line)
-                    if stdout_match:
-                        output_file = stdout_match.group(1)
-                        break
-
-        if not output_file:
-            # Fallback to standard naming if we can't get it from scontrol
-            output_file = f"slurm-{job_id}.out"
-            print(
-                f"Could not determine output file from scontrol, using default: {output_file}"
-            )
-        else:
-            print(f"Monitoring job {job_id} output file: {output_file}")
-
-        # Tail the output file in real-time
-        tail_process = None
-        try:
-            # Use tail -f to follow the output file
-            tail_process = subprocess.Popen(
-                ["tail", "-f", output_file],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-                universal_newlines=True,
-            )
-
-            # Stream output from tail
-            while True:
-                # Check if job is still running
-                result = subprocess.run(
-                    ["squeue", "--job", job_id, "--noheader"],
-                    capture_output=True,
-                    text=True,
-                )
-
-                job_still_running = result.returncode == 0 and result.stdout.strip()
-
-                # If job finished, read any remaining output and exit
-                if not job_still_running:
-                    print(f"Job {job_id} has finished. Reading final output...")
-                    # Read any remaining output from tail
-                    try:
-                        if tail_process.stdout:
-                            # Read all remaining lines
-                            while True:
-                                line = tail_process.stdout.readline()
-                                if not line:
-                                    break
-                                print(line.rstrip())
-                    except Exception:
-                        pass
-                    break
-
-                # Read available output (only if job is still running)
-                if tail_process.stdout:
-                    try:
-                        # Use select to check if data is available (non-blocking)
-                        import select
-
-                        if select.select([tail_process.stdout], [], [], 1)[0]:
-                            line = tail_process.stdout.readline()
-                            if line:
-                                print(line.rstrip())
-                    except Exception:
-                        # Fallback if select doesn't work
-                        pass
-
-                time.sleep(1)
-
-        except FileNotFoundError:
-            print(
-                f"Output file {output_file} not found. Monitoring job status instead..."
-            )
-            # Fallback: monitor job status without output
-            while True:
-                result = subprocess.run(
-                    ["squeue", "--job", job_id, "--noheader"],
-                    capture_output=True,
-                    text=True,
-                )
-
-                if result.returncode != 0 or not result.stdout.strip():
-                    break
-
-                print(f"Job {job_id} still running...")
-                time.sleep(30)
-
-        except Exception as e:
-            print(f"Error tailing output file: {e}")
-            # Fallback: monitor job status without output
-            while True:
-                result = subprocess.run(
-                    ["squeue", "--job", job_id, "--noheader"],
-                    capture_output=True,
-                    text=True,
-                )
-
-                if result.returncode != 0 or not result.stdout.strip():
-                    break
-
-                print(f"Job {job_id} still running...")
-                time.sleep(30)
-
-        finally:
-            # Clean up tail process
-            if tail_process and tail_process.poll() is None:
-                tail_process.terminate()
-                try:
-                    tail_process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    tail_process.kill()
-
-    try:
-        # Check final job status
+    if result.returncode != 0 or not result.stdout.strip():
+        # Job might have finished, check with sacct
         sacct_result = subprocess.run(
             ["sacct", "-j", job_id, "--format=State", "--noheader", "--parsable2"],
             capture_output=True,
             text=True,
         )
-
-        if sacct_result.returncode == 0:
+        if sacct_result.returncode == 0 and sacct_result.stdout.strip():
             states = [
                 s.strip() for s in sacct_result.stdout.strip().split("\n") if s.strip()
             ]
-            if states:
-                final_state = states[0]
-                if final_state in ["COMPLETED"]:
-                    print(f"{job_name} completed successfully (Job ID: {job_id}).")
-                    return
+            if any(states):
+                return states[0]
+        return "UNKNOWN"
+
+    return result.stdout.strip()
+
+
+def get_output_file_path(job_id: str) -> str:
+    """Retrieve the output file path using scontrol."""
+    scontrol_result = subprocess.run(
+        ["scontrol", "show", "job", job_id],
+        capture_output=True,
+        text=True,
+    )
+
+    if scontrol_result.returncode == 0:
+        for line in scontrol_result.stdout.split("\n"):
+            if "StdOut=" in line:
+                stdout_match = re.search(r"StdOut=(\S+)", line)
+                if stdout_match:
+                    return stdout_match.group(1)
+
+    # Fallback to standard naming
+    return f"slurm-{job_id}.out"
+
+
+def tail_output_file(output_file: str, job_id: str) -> None:
+    """Read the output file in real-time until the job finishes."""
+    print(f"Monitoring output file: {output_file}")
+
+    # Wait for file to be created
+    while not os.path.exists(output_file):
+        time.sleep(1)
+
+    try:
+        with open(output_file, "r") as f:
+            while True:
+                # Check job status first
+                job_state = poll_job_status(job_id)
+                if job_state not in ["RUNNING", "PENDING", "CONFIGURING", "COMPLETING"]:
+                    print(f"Job {job_id} finished with state: {job_state}.")
+                    # Read any remaining content
+                    remaining = f.read()
+                    if remaining:
+                        print(remaining.rstrip())
+                    break
+
+                # Read new content
+                line = f.readline()
+                if line:
+                    print(line.rstrip())
                 else:
-                    raise RuntimeError(
-                        f"{job_name} failed with state: {final_state} (Job ID: {job_id})"
-                    )
+                    # No new content, sleep briefly
+                    time.sleep(0.5)
 
-        # If we can't determine status, assume success
-        print(f"{job_name} completed (Job ID: {job_id}).")
+    except FileNotFoundError:
+        print(f"Output file {output_file} not found")
+    except Exception as e:
+        print(f"Error while reading output file: {e}")
+        raise
 
-    finally:
-        # Remove from tracking list
-        if job_id in running_job_ids:
-            running_job_ids.remove(job_id)
+
+def finalize_job(job_id: str, job_name: str) -> None:
+    """Finalize the job by checking its final state."""
+    final_state = poll_job_status(job_id)
+    if final_state == "COMPLETED":
+        print(f"{job_name} completed successfully (Job ID: {job_id}).")
+    else:
+        raise RuntimeError(
+            f"{job_name} finished with state: {final_state} (Job ID: {job_id})"
+        )
+
+
+def wait_for_job_completion(job_id: str, job_name: str):
+    """Wait for a SLURM job to complete and stream its output."""
+    print(f"Starting {job_name}...")
+
+    # Wait for the job to start running
+    while True:
+        job_state = poll_job_status(job_id)
+        if job_state == "RUNNING":
+            print(f"Job {job_id} is now running. Monitoring output...")
+            break
+        elif job_state in ["COMPLETED", "FAILED", "CANCELLED", "TIMEOUT"]:
+            print(f"Job {job_id} finished with state: {job_state} before running.")
+            finalize_job(job_id, job_name)
+            return
+        else:
+            print(f"Job {job_id} status: {job_state}. Waiting...")
+            time.sleep(10)
+
+    # Get the output file path and tail it
+    output_file = get_output_file_path(job_id)
+    tail_output_file(output_file, job_id)
+
+    # Finalize the job
+    finalize_job(job_id, job_name)
 
 
 def run_job(
