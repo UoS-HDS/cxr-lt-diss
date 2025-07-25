@@ -31,7 +31,10 @@ def flatten(x: Sequence) -> Generator:
 def get_model(model_name: str, init_args: dict | None = None) -> Module:
     """Get a model from timm or transformers"""
 
-    if model_name in ["convnext", "convnextv2", "vit"] and init_args is not None:
+    if (
+        model_name in ["convnext", "convnextv2", "vit", "maxvit"]
+        and init_args is not None
+    ):
         return timm.create_model(**init_args)
     elif model_name == "medvit":
         ckpt = torch.load("checkpoints/MedViT_small_im1k.pth")

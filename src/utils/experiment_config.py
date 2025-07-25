@@ -52,7 +52,9 @@ def get_experiment_paths(config: Dict[str, Any], runtime: str) -> Dict[str, Path
     exp_name = generate_experiment_name(config)
     image_size = config["image_size"]
     task = config["task"]
-    conf_matrix_name = "conf_matrix" if config["predict_type"] == "dev" else "conf_matrix_test"
+    conf_matrix_name = (
+        "conf_matrix" if config["predict_type"] == "dev" else "conf_matrix_test"
+    )
 
     return {
         # Experiment name
@@ -70,7 +72,9 @@ def get_experiment_paths(config: Dict[str, Any], runtime: str) -> Dict[str, Path
         # Logging and outputs
         "tb_log_dir": Path(f".out/tb/{image_size}"),
         "submission_dir": Path(f"submissions/{task}/{exp_name}"),
-        "conf_matrix_path": Path(f"submissions/{task}/{exp_name}/{conf_matrix_name}.svg"),
+        "conf_matrix_path": Path(
+            f"submissions/{task}/{exp_name}/{conf_matrix_name}.svg"
+        ),
         # Pseudo-labels
         "pseudo_label_dir": Path(f".tmp/pseudolabels/{exp_name}"),
         "chexpert_pseudo_path": Path(
@@ -125,7 +129,7 @@ def validate_experiment_config(config: Dict[str, Any]) -> None:
         if key not in config:
             raise ValueError(f"Missing required config key: {key}")
 
-    if config["model_type"] not in ["convnext", "medvit"]:
+    if config["model_type"] not in ["convnext", "medvit", "vit", "maxvit"]:
         raise ValueError(f"Invalid model_type: {config['model_type']}")
 
     if config["loss_type"] not in ["asl", "ral"]:
