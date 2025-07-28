@@ -19,6 +19,38 @@ from src.models.ml_decoder import MLDecoder
 from src.utils import get_model, get_label_embeddings
 
 
+class MajorityClassClassifier(nn.Module):
+    pass
+
+
+class RandomClassifier(nn.Module):
+    """Random classifier for baseline
+    uses the class proportions in the training set
+    """
+
+    def __init__(
+        self,
+        model_init_args: dict[str, Any],
+        loss_init_args: dict[str, Any],
+        classes: list[str],
+    ):
+        super().__init__()
+        self.classes = classes
+        self.class_nums = loss_init_args["class_instance_nums"]
+        self.total_images = loss_init_args["total_instance_num"]
+        self.class_props = self.class_nums / self.total_images
+        self.model = nn.Linear(1, len(classes))
+        self.model.weight = nn.Parameter(
+            torch.tensor(self.class_props, dtype=torch.float32).unsqueeze(0),
+            requires_grad=False,
+        )
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            # x is not used, but required for compatibility
+            # with the training loop
+            return self.model(x.unsqueeze(1)).squeeze(1)
+
+
 class Backbone(nn.Module):
     """Backbone trained in Stage 1"""
 
@@ -30,16 +62,10 @@ class Backbone(nn.Module):
         embedding: str | None = None,
         zsl: int = 0,
         target_dim: int = 768,
-        # enable_checkpointing: bool = True,
     ):
         super().__init__()
         self.model = get_model(model_type, model_init_args)
         self.model.head = nn.Identity()
-        # self.enable_checkpointing = enable_checkpointing
-
-        # # Enable gradient checkpointing for ConvNeXt if available
-        # if hasattr(self.model, "set_grad_checkpointing") and enable_checkpointing:
-        #     self.model.set_grad_checkpointing(True)
 
         # Auto-detect input dimensions
         with torch.no_grad():
@@ -97,16 +123,12 @@ class FusionBackbone(nn.Module):
         zsl: int = 0,
         target_dim: int = 768,
         pretrained_path: str | Path | None = None,
-        # enable_checkpointing: bool = True,
+        freeze_backbone: bool = True,
     ):
         super().__init__()
+        self.freeze_backbone = freeze_backbone
         self.model = get_model(model_type, model_init_args)
         self.model.head = nn.Identity()
-        # self.enable_checkpointing = enable_checkpointing
-
-        # # Enable gradient checkpointing for ConvNeXt if available
-        # if hasattr(self.model, "set_grad_checkpointing") and enable_checkpointing:
-        #     self.model.set_grad_checkpointing(True)
 
         # Auto-detect input dimensions
         with torch.no_grad():
@@ -115,6 +137,7 @@ class FusionBackbone(nn.Module):
             input_dim = dummy_output.shape[1]
 
         if pretrained_path is not None:
+            print(f"Using pretrained backbone: {pretrained_path}")
             self.model.load_state_dict(torch.load(pretrained_path))
         self.model.head = nn.Identity()
 
@@ -159,12 +182,11 @@ class FusionBackbone(nn.Module):
         no_pad = torch.nonzero(x.sum(dim=(1, 2, 3)) != 0).squeeze(1)
         x = x[no_pad]
 
-        # Use gradient checkpointing if enabled
-        # if self.enable_checkpointing and self.training:
-        #     x = checkpoint(self.model, x, use_reentrant=False)
-        # else:
-        with torch.no_grad():
-            x = self.model(x).detach()
+        if self.freeze_backbone:
+            with torch.no_grad():
+                x = self.model(x).detach()
+        else:
+            x = self.model(x)
 
         x = self.backbone_projection(x)  # Project to standard dimensions
         x = self.conv2d(x)
