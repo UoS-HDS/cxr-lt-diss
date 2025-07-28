@@ -306,6 +306,7 @@ def generate_stage2_pred_config(
     base_config["trainer"]["callbacks"].append(prediction_callback)
     base_config["model"]["skip_predict_metrics"] = False
     base_config["model"]["conf_matrix_path"] = str(paths["conf_matrix_path"])
+    base_config["model"]["pretrained_path"] = None
     base_config["data"]["datamodule_cfg"]["pred_df_path"] = str(paths["pred_df_path"])
 
     return base_config

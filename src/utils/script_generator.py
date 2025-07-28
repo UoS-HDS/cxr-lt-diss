@@ -152,9 +152,9 @@ def generate_predict_final_script(
     gpu_config = get_gpu_config(config)
     docker_image = config["docker_image"]
     if config["predict_type"] == "dev":
-        res_file = "results"
+        res_file = "results.txt"
     else:
-        res_file = "results_test"
+        res_file = "results_test.txt"
 
     return f"""#!/bin/bash
 
@@ -162,18 +162,13 @@ set -e
 
 project_dir="/mnt/isilon1/$USER/hds-diss/"
 ckpt_path="$1"
-backbone_path="$2"
 
 if [ -z "$ckpt_path" ]; then
-    echo "Usage: $0 <checkpoint_path> <backbone_checkpoint_path>"
-    exit 1
-fi
-if [ -z "$backbone_path" ]; then
-    echo "Usage: $0 <checkpoint_path> <backbone_checkpoint_path>"
+    echo "Usage: $0 <checkpoint_path>"
     exit 1
 fi
 
-cmd="STAGE=2 uv run --python 3.12.9 main.py predict --config {paths["config_backup_dir"]}/config-stage-2-pred.yaml --ckpt_path $ckpt_path --model.pretrained_path $backbone_path"
+cmd="STAGE=2 uv run --python 3.12.9 main.py predict --config {paths["config_backup_dir"]}/config-stage-2-pred.yaml --ckpt_path $ckpt_path"
 
 # Execute training script
 CUDA_VISIBLE_DEVICES={gpu_config["predict_cuda_devices"]} docker run --rm --gpus '"device={gpu_config["predict_cuda_devices"]}"' --ipc=host \\
@@ -183,7 +178,7 @@ CUDA_VISIBLE_DEVICES={gpu_config["predict_cuda_devices"]} docker run --rm --gpus
     -e UV_PROJECT_ENVIRONMENT=/opt/venv/ \\
     {docker_image} \\
     bash -c "set -e; \\
-    $cmd > {paths["submission_dir"]}/{res_file}.txt"
+    $cmd > {paths["submission_dir"]}/{res_file}"
 
 # Check if docker command succeeded
 if [ $? -ne 0 ]; then

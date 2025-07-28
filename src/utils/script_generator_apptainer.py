@@ -86,7 +86,9 @@ def _generate_predict_pseudo_script(
     task = config["task"]
     job_name = f"pseudo_predict_{task}"
     gpu_count = int(config["gpu_count"])
-    slurm_header = _get_slurm_header(job_name, gpu_count, mem="24G")
+    partition = config["partition"]
+    mem = config["mem"]
+    slurm_header = _get_slurm_header(job_name, gpu_count, mem=mem, partition=partition)
     project_dir = config["project_dir"]
     apptainer_image = config["apptainer_image"]
     config_path = paths["config_backup_dir"] / "config.yaml"
@@ -138,7 +140,9 @@ def _generate_train_fusion_script(
     task = config["task"]
     job_name = f"train_fusion_{task}"
     gpu_count = int(config["gpu_count"])
-    slurm_header = _get_slurm_header(job_name, gpu_count)
+    mem = config["mem"]
+    partition = config["partition"]
+    slurm_header = _get_slurm_header(job_name, gpu_count, mem=mem, partition=partition)
     project_dir = config["project_dir"]
     apptainer_image = config["apptainer_image"]
     config_path = paths["config_backup_dir"] / "config-stage-2.yaml"
@@ -190,14 +194,16 @@ def _generate_predict_final_script(
     task = config["task"]
     job_name = f"final_predict_{task}"
     gpu_count = int(config["gpu_count"])
-    slurm_header = _get_slurm_header(job_name, gpu_count)
+    mem = config["mem"]
+    partition = config["partition"]
+    slurm_header = _get_slurm_header(job_name, gpu_count, mem=mem, partition=partition)
     project_dir = config["project_dir"]
     apptainer_image = config["apptainer_image"]
     config_path = paths["config_backup_dir"] / "config-stage-2-pred.yaml"
     if config["predict_type"] == "dev":
-        res_file = "results"
+        res_file = "results.txt"
     else:
-        res_file = "results_test"
+        res_file = "results_test.txt"
     submission_path = paths["submission_dir"] / res_file
 
     return f"""{slurm_header}
@@ -207,16 +213,15 @@ export MASTER_ADDR=127.0.0.1
 export MASTER_PORT=$(shuf -i 10000-20000 -n 1)
 
 ckpt_path="$1"
-backbone_path="$2"
 project_dir="{project_dir}"
 
-if [ -z "$ckpt_path" ] || [ -z "$backbone_path" ]; then
-    echo "Usage: $0 <checkpoint_path> <backbone_checkpoint_path>"
+if [ -z "$ckpt_path" ]; then
+    echo "Usage: $0 <checkpoint_path>"
     exit 1
 fi
 
 cd "$project_dir"
-cmd="STAGE=2 uv run --python 3.12.9 main.py predict --config {config_path} --ckpt_path '$ckpt_path' --model.pretrained_path '$backbone_path'"
+cmd="STAGE=2 uv run --python 3.12.9 main.py predict --config {config_path} --ckpt_path '$ckpt_path'"
 
 apptainer exec --nv \\
     --bind "$project_dir":"$project_dir" \\
@@ -230,7 +235,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "Final predictions saved to {submission_path}"
+echo "Final prediction results saved to {submission_path}"
 echo "Job complete"
 """
 
