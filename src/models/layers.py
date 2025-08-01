@@ -6,6 +6,7 @@ https://github.com/dongkyunk/CheXFusion/blob/main/model/layers.py
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 import timm
 import torch.nn as nn
@@ -36,19 +37,19 @@ class RandomClassifier(nn.Module):
     ):
         super().__init__()
         self.classes = classes
-        self.class_nums = loss_init_args["class_instance_nums"]
-        self.total_images = loss_init_args["total_instance_num"]
+        self.class_nums = np.array(loss_init_args["class_instance_nums"])
+        self.total_images = np.array(loss_init_args["total_instance_num"])
         self.class_props = self.class_nums / self.total_images
-        self.model = nn.Linear(1, len(classes))
+        self.model = nn.Linear(1, len(classes), bias=False)
         self.model.weight = nn.Parameter(
             torch.tensor(self.class_props, dtype=torch.float32).unsqueeze(0),
             requires_grad=False,
         )
 
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            # x is not used, but required for compatibility
-            # with the training loop
-            return self.model(x.unsqueeze(1)).squeeze(1)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x is not used, but required for compatibility
+        # with the training loop
+        return self.model(x.unsqueeze(1)).squeeze(1)
 
 
 class Backbone(nn.Module):

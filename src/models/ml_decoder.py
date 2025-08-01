@@ -213,8 +213,9 @@ class MLDecoder(nn.Module):
         self.use_embeddings = embeddings is not None
 
         if self.zsl:
-            if decoder_embedding != 300:
-                self.wordvec_proj = nn.Linear(300, decoder_embedding)
+            embedding_dim = embeddings.shape[-1]
+            if decoder_embedding != embedding_dim:
+                self.wordvec_proj = nn.Linear(embedding_dim, decoder_embedding)
             else:
                 self.wordvec_proj = nn.Identity()
             self.decoder.duplicate_pooling = nn.Parameter(

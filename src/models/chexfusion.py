@@ -134,16 +134,20 @@ class CxrModel(LightningModule):
             head_idxs = [6, 14, 4, 20, 0, 16, 2, 12, 24]
             medium_idxs = [25, 18, 5, 9, 1, 13, 15, 10, 8, 22, 3]
             tail_idxs = [21, 17, 19, 7, 23, 11]
+        elif self.num_classes == 5:
+            pass
         else:
             raise ValueError(
-                f"Unexpected number of classes: {self.num_classes}. Expected 40 or 26."
+                f"Unexpected number of classes: {self.num_classes}. Expected 40, 26 or 5."
             )
 
         ap = aps.sum() / self.num_classes
-
-        head_ap = aps[head_idxs].sum() / len(head_idxs)
-        medium_ap = aps[medium_idxs].sum() / len(medium_idxs)
-        tail_ap = aps[tail_idxs].sum() / len(tail_idxs)
+        if self.num_classes == 5:
+            head_ap = medium_ap = tail_ap = np.nan
+        else:
+            head_ap = aps[head_idxs].sum() / len(head_idxs)  # type: ignore
+            medium_ap = aps[medium_idxs].sum() / len(medium_idxs)  # type: ignore
+            tail_ap = aps[tail_idxs].sum() / len(tail_idxs)  # type: ignore
 
         return {
             "ap": ap,
@@ -315,45 +319,12 @@ class CxrModelFusion(CxrModel):
             skip_predict_metrics,
             conf_matrix_path,
         )
-        self.backbone = FusionBackbone(
-            model_type=model_type,
-            model_init_args=model_init_args,
-            classes=classes,
-            embedding=embedding,
-            zsl=zsl,
-            pretrained_path=pretrained_path,
-        )
-
-
-class CxrModelWithEmbeddings(CxrModel):
-    """Backbone with embeddings"""
-
-    def __init__(
-        self,
-        lr: float,
-        classes: list[str],
-        loss_init_args: dict[str, Any],
-        model_type: str,
-        model_init_args: dict[str, Any],
-        zsl: int = 0,
-        skip_predict_metrics: bool = True,
-        pretrained_path: str | None = None,
-    ):
-        pass
-
-
-class CxrModelFusionWithEmbeddings(CxrModel):
-    """ChexFusion with embeddings"""
-
-    def __init__(
-        self,
-        lr: float,
-        classes: list[str],
-        loss_init_args: dict[str, Any],
-        model_type: str,
-        model_init_args: dict[str, Any],
-        zsl: int = 0,
-        skip_predict_metrics: bool = True,
-        pretrained_path: str | None = None,
-    ):
-        pass
+        if model_type not in ["random"]:
+            self.backbone = FusionBackbone(
+                model_type=model_type,
+                model_init_args=model_init_args,
+                classes=classes,
+                embedding=embedding,
+                zsl=zsl,
+                pretrained_path=pretrained_path,
+            )
