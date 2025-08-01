@@ -77,6 +77,7 @@ class CxrModel(LightningModule):
         self.skip_predict_metrics = skip_predict_metrics
         self.conf_matrix_path = conf_matrix_path
 
+        self.train_step_outputs = []
         self.validation_step_outputs = []
         self.prediction_step_outputs = []
 
@@ -160,6 +161,57 @@ class CxrModel(LightningModule):
             "tail_ap": tail_ap,
         }
 
+    def log_metrics(self, metrics: dict[str, Any], prefix: str = "val") -> None:
+        """log metrics to TensorBoard"""
+        self.log(
+            f"{prefix}_ap",
+            metrics["ap"],
+            prog_bar=True,
+            sync_dist=True,
+        )
+        self.log(
+            f"{prefix}_auroc",
+            metrics["auroc"],
+            prog_bar=True,
+            sync_dist=True,
+        )
+        self.log(
+            f"{prefix}_f1",
+            metrics["f1"],
+            prog_bar=True,
+            sync_dist=True,
+        )
+        self.log(
+            f"{prefix}_acc",
+            metrics["acc"],
+            prog_bar=True,
+            sync_dist=True,
+        )
+        self.log(
+            f"{prefix}_balanced_acc",
+            metrics["balanced_acc"],
+            prog_bar=True,
+            sync_dist=True,
+        )
+        self.log(
+            f"{prefix}_head_ap",
+            metrics["head_ap"],
+            prog_bar=True,
+            sync_dist=True,
+        )
+        self.log(
+            f"{prefix}_medium_ap",
+            metrics["medium_ap"],
+            prog_bar=True,
+            sync_dist=True,
+        )
+        self.log(
+            f"{prefix}_tail_ap",
+            metrics["tail_ap"],
+            prog_bar=True,
+            sync_dist=True,
+        )
+
     def shared_step(self, batch: tuple[Tensor, Tensor], batch_idx: int):
         image, label = batch
         pred = self(image)
@@ -184,7 +236,13 @@ class CxrModel(LightningModule):
             on_epoch=True,
             sync_dist=True,
         )
+        self.train_step_outputs.append(res)
         return res["loss"]
+
+    def on_train_epoch_end(self) -> None:
+        metrics = self.accumulate_metrics(self.train_step_outputs)
+        self.log_metrics(metrics, prefix="train")
+        self.train_step_outputs = []
 
     def validation_step(self, batch: tuple[Tensor, Tensor], batch_idx: int):
         res = self.shared_step(batch, batch_idx)
@@ -193,54 +251,7 @@ class CxrModel(LightningModule):
 
     def on_validation_epoch_end(self):
         metrics = self.accumulate_metrics(self.validation_step_outputs)
-        self.log(
-            "val_ap",
-            metrics["ap"],
-            prog_bar=True,
-            sync_dist=True,
-        )
-        self.log(
-            "val_auroc",
-            metrics["auroc"],
-            prog_bar=True,
-            sync_dist=True,
-        )
-        self.log(
-            "val_acc",
-            metrics["acc"],
-            prog_bar=True,
-            sync_dist=True,
-        )
-        self.log(
-            "val_balanced_acc",
-            metrics["balanced_acc"],
-            prog_bar=True,
-            sync_dist=True,
-        )
-        self.log(
-            "val_f1",
-            metrics["f1"],
-            prog_bar=True,
-            sync_dist=True,
-        )
-        self.log(
-            "val_head_ap",
-            metrics["head_ap"],
-            prog_bar=True,
-            sync_dist=True,
-        )
-        self.log(
-            "val_medium_ap",
-            metrics["medium_ap"],
-            prog_bar=True,
-            sync_dist=True,
-        )
-        self.log(
-            "val_tail_ap",
-            metrics["tail_ap"],
-            prog_bar=True,
-            sync_dist=True,
-        )
+        self.log_metrics(metrics, prefix="val")
         self.validation_step_outputs = []
 
     def predict_step(self, batch: tuple[Tensor, Tensor], batch_idx: int):
