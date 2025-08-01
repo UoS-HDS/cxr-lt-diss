@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import Any, Dict
 
+from src.utils.experiment_config import generate_experiment_name
+
 
 def _get_slurm_header(
     job_name: str,
@@ -12,8 +14,8 @@ def _get_slurm_header(
     """Generates a standard SLURM header for job scripts."""
     return f"""#!/bin/bash
 #SBATCH --job-name={job_name}
-#SBATCH --output=logs/slurm_{job_name}_%j.out
-#SBATCH --error=logs/slurm_{job_name}_%j.err
+#SBATCH --output=logs/{job_name}_%j.out
+#SBATCH --error=logs/{job_name}_%j.err
 #SBATCH --partition={partition}
 #SBATCH --gres=gpu:{gpu_count}
 #SBATCH --time={time}
@@ -28,7 +30,8 @@ def _generate_train_backbone_script(
 ) -> str:
     """Generates the script for training the backbone model with Apptainer."""
     task = config["task"]
-    job_name = f"train_backbone_{task}"
+    exp_name = generate_experiment_name(config)
+    job_name = f"backbone_{exp_name}_{task}"
     gpu_count = int(config["gpu_count"])
     mem = config["mem"]
     partition = config["partition"]
@@ -84,7 +87,8 @@ def _generate_predict_pseudo_script(
 ) -> str:
     """Generates the script for predicting pseudo-labels with Apptainer."""
     task = config["task"]
-    job_name = f"pseudo_predict_{task}"
+    exp_name = generate_experiment_name(config)
+    job_name = f"pseudo_{exp_name}_{task}"
     gpu_count = int(config["gpu_count"])
     partition = config["partition"]
     mem = config["mem"]
@@ -138,7 +142,8 @@ def _generate_train_fusion_script(
 ) -> str:
     """Generates the script for training the fusion model with Apptainer."""
     task = config["task"]
-    job_name = f"train_fusion_{task}"
+    exp_name = generate_experiment_name(config)
+    job_name = f"fusion_{exp_name}_{task}"
     gpu_count = int(config["gpu_count"])
     mem = config["mem"]
     partition = config["partition"]
@@ -192,7 +197,8 @@ def _generate_predict_final_script(
 ) -> str:
     """Generates the script for final prediction with Apptainer."""
     task = config["task"]
-    job_name = f"final_predict_{task}"
+    exp_name = generate_experiment_name(config)
+    job_name = f"predict_{exp_name}_{task}"
     gpu_count = int(config["gpu_count"])
     mem = config["mem"]
     partition = config["partition"]

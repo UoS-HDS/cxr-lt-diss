@@ -8,6 +8,16 @@ from pathlib import Path
 from typing import Dict, Any
 import copy
 
+from src.utils.class_counts import (
+    CLASSES_26,
+    CLASSES_40,
+    CLASSES_45,
+    INSTANCE_NUMS_26,
+    INSTANCE_NUMS_40,
+    INSTANCE_NUMS_45,
+    TOTAL_IMAGES,
+)
+
 
 def generate_main_config(
     config: Dict[str, Any], paths: Dict[str, Path]
@@ -15,6 +25,19 @@ def generate_main_config(
     """Generate the main config.yaml content"""
 
     exp_name = paths["exp_name"]
+    task = config["task"]
+    if task in ["task1", "task3"]:
+        classes = CLASSES_40
+        instance_nums = INSTANCE_NUMS_40
+        train_csv = "train_labeled.csv"
+        auxillary_train_csv = "train_expanded.csv"
+        n_classes = 40
+    else:
+        classes = CLASSES_26
+        instance_nums = INSTANCE_NUMS_26
+        train_csv = "train_labeled_26.csv"
+        auxillary_train_csv = "train_expanded_26.csv"
+        n_classes = 26
 
     main_config = {
         "seed_everything": 8089,
@@ -29,7 +52,7 @@ def generate_main_config(
                     "class_path": "lightning.pytorch.loggers.TensorBoardLogger",
                     "init_args": {
                         "save_dir": str(paths["tb_log_dir"]),
-                        "name": f"{exp_name}/stage-1",
+                        "name": f"{exp_name}/{task}/stage-1",
                     },
                 }
             ],
@@ -69,97 +92,15 @@ def generate_main_config(
             "lr": config["lr"],
             "embedding": config["embedding"],
             "zsl": config["zsl"],
-            "classes": [
-                "Adenopathy",
-                "Atelectasis",
-                "Azygos Lobe",
-                "Calcification of the Aorta",
-                "Cardiomegaly",
-                "Clavicle Fracture",
-                "Consolidation",
-                "Edema",
-                "Emphysema",
-                "Enlarged Cardiomediastinum",
-                "Fibrosis",
-                "Fissure",
-                "Fracture",
-                "Granuloma",
-                "Hernia",
-                "Hydropneumothorax",
-                "Infarction",
-                "Infiltration",
-                "Kyphosis",
-                "Lobar Atelectasis",
-                "Lung Lesion",
-                "Lung Opacity",
-                "Mass",
-                "Nodule",
-                "Normal",
-                "Pleural Effusion",
-                "Pleural Other",
-                "Pleural Thickening",
-                "Pneumomediastinum",
-                "Pneumonia",
-                "Pneumoperitoneum",
-                "Pneumothorax",
-                "Pulmonary Embolism",
-                "Pulmonary Hypertension",
-                "Rib Fracture",
-                "Round(ed) Atelectasis",
-                "Subcutaneous Emphysema",
-                "Support Devices",
-                "Tortuous Aorta",
-                "Tuberculosis",
-            ],
+            "classes": classes,
             "loss_init_args": {
                 "type": config["loss_type"],
-                "class_instance_nums": [
-                    3137,
-                    63471,
-                    191,
-                    4161,
-                    71794,
-                    158,
-                    14822,
-                    36137,
-                    3462,
-                    28673,
-                    1075,
-                    2672,
-                    11193,
-                    2794,
-                    3756,
-                    633,
-                    710,
-                    9431,
-                    686,
-                    126,
-                    2202,
-                    74659,
-                    4978,
-                    7140,
-                    32885,
-                    64252,
-                    580,
-                    3124,
-                    694,
-                    43744,
-                    505,
-                    13562,
-                    1565,
-                    864,
-                    8704,
-                    153,
-                    2019,
-                    83899,
-                    3078,
-                    1929,
-                ],
-                "total_instance_num": 248137,
+                "class_instance_nums": instance_nums,
+                "total_instance_num": TOTAL_IMAGES,
             },
             "model_type": config["model_type"],
             "model_init_args": {
-                "num_classes": 40,
+                "num_classes": n_classes,
                 "model_name": config["model_name"],
                 "pretrained": True,
             },
@@ -177,80 +118,38 @@ def generate_main_config(
                 "loader_type": "single",
                 "data_dir": "data/",
                 "resized_dir": "data-resized/",
-                "train_df_path": "data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/train_labeled_no_missing_views.csv",
+                "train_df_path": f"data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/{train_csv}",
                 "task1_df_path": "data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/development_labeled_task1.csv",
                 "task2_df_path": "data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/development_labeled_task2.csv",
                 "zero_shot_df_path": "data/cxr-lt-iccv-workshop-cvamd/2.0.0/cxr-lt-2024/development_task3.csv",
-                "vinbig_train_df_path": "data/vinbig-cxr/train_expanded.csv",
+                "vinbig_train_df_path": f"data/vinbig-cxr/{auxillary_train_csv}",
                 "vinbig_pseudo_train_df_path": str(paths["vinbig_pseudo_path"]),
-                "nih_train_df_path": "data/nih-cxr/train_expanded.csv",
+                "nih_train_df_path": f"data/nih-cxr/{auxillary_train_csv}",
                 "nih_pseudo_train_df_path": str(paths["nih_pseudo_path"]),
-                "chexpert_train_df_path": "data/chexpert/CheXpert-v1.0/train_expanded.csv",
+                "chexpert_train_df_path": f"data/chexpert/CheXpert-v1.0/{auxillary_train_csv}",
                 "chexpert_pseudo_train_df_path": str(paths["chexpert_pseudo_path"]),
                 "pred_df_path": str(paths["pred_df_path"]),
                 "val_split": 0.1,
                 "seed": 8089,
                 "size": config["image_size"],
-                "classes": [
-                    "Adenopathy",
-                    "Atelectasis",
-                    "Azygos Lobe",
-                    "Calcification of the Aorta",
-                    "Cardiomegaly",
-                    "Clavicle Fracture",
-                    "Consolidation",
-                    "Edema",
-                    "Emphysema",
-                    "Enlarged Cardiomediastinum",
-                    "Fibrosis",
-                    "Fissure",
-                    "Fracture",
-                    "Granuloma",
-                    "Hernia",
-                    "Hydropneumothorax",
-                    "Infarction",
-                    "Infiltration",
-                    "Kyphosis",
-                    "Lobar Atelectasis",
-                    "Lung Lesion",
-                    "Lung Opacity",
-                    "Mass",
-                    "Nodule",
-                    "Normal",
-                    "Pleural Effusion",
-                    "Pleural Other",
-                    "Pleural Thickening",
-                    "Pneumomediastinum",
-                    "Pneumonia",
-                    "Pneumoperitoneum",
-                    "Pneumothorax",
-                    "Pulmonary Embolism",
-                    "Pulmonary Hypertension",
-                    "Rib Fracture",
-                    "Round(ed) Atelectasis",
-                    "Subcutaneous Emphysema",
-                    "Support Devices",
-                    "Tortuous Aorta",
-                    "Tuberculosis",
-                ],
+                "classes": classes,
             },
         },
         "ckpt_path": None,
     }
 
-    if config["task"] == "task1":
-        main_config["trainer"]["callbacks"].insert(
-            1,
-            {
-                "class_path": "src.callbacks.chexpert_pseudo_callback.ChexpertWriter",
-                "init_args": {
-                    "write_interval": "epoch",
-                    "chexpert_train_df_path": "data/chexpert/CheXpert-v1.0/train_expanded.csv",
-                    "chexpert_pseudo_train_df_path": str(paths["chexpert_pseudo_path"]),
-                    "num_classes": 40,
-                },
+    main_config["trainer"]["callbacks"].insert(
+        1,
+        {
+            "class_path": "src.callbacks.chexpert_pseudo_callback.ChexpertWriter",
+            "init_args": {
+                "write_interval": "epoch",
+                "chexpert_train_df_path": f"data/chexpert/CheXpert-v1.0/{auxillary_train_csv}",
+                "chexpert_pseudo_train_df_path": str(paths["chexpert_pseudo_path"]),
+                "num_classes": n_classes,
             },
-        )
+        },
+    )
 
     return main_config
 
@@ -262,9 +161,10 @@ def generate_stage2_config(
     base_config = generate_main_config(config, paths)
 
     exp_name = paths["exp_name"]
+    task = config["task"]
 
     # Modify for stage 2
-    base_config["trainer"]["logger"][0]["init_args"]["name"] = f"{exp_name}/stage-2"
+    base_config["trainer"]["logger"][0]["init_args"]["name"] = f"{exp_name}/{task}/stage-2"
     base_config["trainer"]["callbacks"][0]["init_args"]["dirpath"] = str(
         paths["fusion_checkpoint_dir"]
     )
@@ -308,6 +208,15 @@ def generate_stage2_pred_config(
     base_config["model"]["conf_matrix_path"] = str(paths["conf_matrix_path"])
     base_config["model"]["pretrained_path"] = None
     base_config["data"]["datamodule_cfg"]["pred_df_path"] = str(paths["pred_df_path"])
+    if task == "task3":
+        classes = ["Bulla", "Cardiomyopathy", "Hilum", "Osteopenia", "Scoliosis"]
+        instance_nums = [0, 0, 0, 0, 0]
+        n_classes = 5
+        base_config["model"]["classes"] = classes
+        base_config["model"]["loss_init_args"]["class_instance_nums"] = instance_nums
+        base_config["model"]["model_init_args"]["num_classes"] = n_classes
+        base_config["data"]["datamodule_cfg"]["classes"] = classes
+
 
     return base_config
 
@@ -317,6 +226,17 @@ def generate_auxiliary_configs(
 ) -> Dict[str, Dict[str, Any]]:
     """Generate auxiliary dataset configs (VinBig, NIH)"""
     base_config = generate_main_config(config, paths)
+    task = config["task"]
+
+    if task == "task1":
+        auxillary_train_csv = "train_expanded.csv"
+        n_classes = 40
+    elif task == "task2":
+        auxillary_train_csv = "train_expanded_26.csv"
+        n_classes = 26
+    else:
+        auxillary_train_csv = "train_expanded_45.csv"
+        n_classes = -1
 
     # VinBig config
     vinbig_config = copy.deepcopy(base_config)
@@ -331,9 +251,9 @@ def generate_auxiliary_configs(
         )
         vinbig_callback["init_args"] = {
             "write_interval": "epoch",
-            "vinbig_train_df_path": "data/vinbig-cxr/train_expanded.csv",
+            "vinbig_train_df_path": f"data/vinbig-cxr/{auxillary_train_csv}",
             "vinbig_pseudo_train_df_path": str(paths["vinbig_pseudo_path"]),
-            "num_classes": 40,
+            "num_classes": n_classes,
         }
         vinbig_config["data"]["datamodule_cfg"]["predict_pseudo_label"] = "vinbig"
     except StopIteration:
@@ -351,9 +271,9 @@ def generate_auxiliary_configs(
         nih_callback["class_path"] = "src.callbacks.nih_pseudo_callback.NIHWriter"
         nih_callback["init_args"] = {
             "write_interval": "epoch",
-            "nih_train_df_path": "data/nih-cxr/train_expanded.csv",
+            "nih_train_df_path": f"data/nih-cxr/{auxillary_train_csv}",
             "nih_pseudo_train_df_path": str(paths["nih_pseudo_path"]),
-            "num_classes": 40,
+            "num_classes": n_classes,
         }
         nih_config["data"]["datamodule_cfg"]["predict_pseudo_label"] = "nih"
     except StopIteration:

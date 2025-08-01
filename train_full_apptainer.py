@@ -77,7 +77,6 @@ def submit_job(
     ckpt_path: Path | None = None,
     use_pseudo: int = 0,
     predict: bool = False,
-    extras: list[str | Path] = [],
 ) -> str:
     """
     Submit a SLURM job using sbatch and return the job ID.
@@ -85,27 +84,18 @@ def submit_job(
     # Make script executable
     os.chmod(script_path, 0o755)
 
-    if not ckpt_path:
-        cmd = ["sbatch", str(script_path), str(use_pseudo)]
-    else:
-        if predict and extras:
-            cmd = [
-                "sbatch",
-                str(script_path),
-                str(ckpt_path),
-                *[str(x) for x in extras],
-            ]
-        elif predict:
-            cmd = ["sbatch", str(script_path), str(ckpt_path)]
-        elif not use_pseudo:
+    if predict:
+        if ckpt_path:
             cmd = ["sbatch", str(script_path), str(ckpt_path)]
         else:
-            cmd = [
-                "sbatch",
-                str(script_path),
-                str(use_pseudo),
-                str(ckpt_path),
-            ]
+            cmd = ["sbatch", str(script_path), "null"]
+    else:
+        if ckpt_path and use_pseudo:
+            cmd = ["sbatch", str(script_path), str(use_pseudo), str(ckpt_path)]
+        elif ckpt_path:
+            cmd = ["sbatch", str(script_path), str(ckpt_path)]
+        else:
+            cmd = ["sbatch", str(script_path), str(use_pseudo)]
 
     print(f"Running command: {' '.join(cmd)}")
 
@@ -254,7 +244,6 @@ def run_job(
     ckpt_path: Path | None = None,
     use_pseudo: int = 0,
     predict: bool = False,
-    extras: list[str | Path] = [],
 ):
     """
     Run a SLURM job and wait for completion, with proper job tracking for cancellation.
@@ -264,7 +253,6 @@ def run_job(
         ckpt_path=ckpt_path,
         use_pseudo=use_pseudo,
         predict=predict,
-        extras=extras,
     )
 
     wait_for_job_completion(job_id, job_name)
@@ -288,7 +276,7 @@ def validate_apptainer_config(config: Dict[str, Any]) -> None:
         if key not in config:
             raise ValueError(f"Missing required config key: {key}")
 
-    if config["model_type"] not in ["convnext", "medvit", "vit"]:
+    if config["model_type"] not in ["convnext", "medvit", "vit", "maxvit", "random"]:
         raise ValueError(f"Invalid model_type: {config['model_type']}")
 
     if config["loss_type"] not in ["asl", "ral"]:
@@ -327,7 +315,11 @@ def setup_experiment(config: Dict[str, Any], paths: Dict[str, Path]):
     print("\n✅ Experiment setup complete!")
 
 
-def run_full_pipeline(config: Dict[str, Any], paths: Dict[str, Path]):
+def run_full_pipeline(
+    config: Dict[str, Any],
+    paths: Dict[str, Path],
+    fusion_only: bool = False,
+):
     """Run the complete training pipeline"""
 
     # Use generated scripts
@@ -357,6 +349,9 @@ def run_full_pipeline(config: Dict[str, Any], paths: Dict[str, Path]):
 
     try:
         for idx in range(N_ITER + 1):
+            if fusion_only:
+                continue
+
             if idx == 0:
                 print("INITIAL TRAINING RUN WITH EXISTING LABELS...")
                 run_job(train_script, "Initial Training")
@@ -379,26 +374,27 @@ def run_full_pipeline(config: Dict[str, Any], paths: Dict[str, Path]):
                 use_pseudo=1,
             )
 
-        ckpt = get_best_ckpt(paths["checkpoint_dir"])
-        print(f"Best checkpoint after all iterations: {ckpt}")
+        if not fusion_only:
+            ckpt = get_best_ckpt(paths["checkpoint_dir"])
+            print(f"Best checkpoint after all iterations: {ckpt}")
 
-        print("Saving backbone model...")
-        res = subprocess.run(
-            [
-                "uv",
-                "run",
-                "save_model.py",
-                "--ckpt",
-                str(ckpt),
-                "--save_to",
-                str(paths["model_path"]),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        if res.returncode != 0:
-            raise RuntimeError(f"Failed to save model: {res.stderr}")
-        print(res.stdout.strip())
+            print("Saving backbone model...")
+            res = subprocess.run(
+                [
+                    "uv",
+                    "run",
+                    "save_model.py",
+                    "--ckpt",
+                    str(ckpt),
+                    "--save_to",
+                    str(paths["model_path"]),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if res.returncode != 0:
+                raise RuntimeError(f"Failed to save model: {res.stderr}")
+            print(res.stdout.strip())
 
         run_job(fusion_script, "Training fusion model", paths["model_path"])
 
@@ -430,7 +426,6 @@ def run_full_pipeline(config: Dict[str, Any], paths: Dict[str, Path]):
             "Predicting final labels with fusion model",
             fusion_ckpt,
             predict=True,
-            extras=[paths["fusion_model_path"]],
         )
 
         print("All jobs completed successfully.")
@@ -454,16 +449,23 @@ def run_predict_only(config: Dict[str, Any], paths: Dict[str, Path]):
 
     print(f"Using script: {predict_script}")
 
-    ckpt = get_best_ckpt(paths["fusion_checkpoint_dir"])
-    print(f"Using checkpoint for prediction: {ckpt}")
+    if config["model_type"] not in ["random"]:
+        fusion_ckpt = get_best_ckpt(paths["fusion_checkpoint_dir"])
+        print(f"Using checkpoint for prediction: {fusion_ckpt}")
 
-    run_job(
-        predict_script,
-        "Predicting final labels",
-        ckpt,
-        predict=True,
-        extras=[paths["fusion_model_path"]],
-    )
+        run_job(
+            predict_script,
+            "Predicting final labels",
+            fusion_ckpt,
+            predict=True,
+        )
+    else:
+        run_job(
+            predict_script,
+            "Predicting final labels with random model",
+            None,
+            predict=True,
+        )
 
     print("Prediction completed successfully.")
 
@@ -479,6 +481,11 @@ def main():
         help="Whether to run in prediction mode only",
     )
     parser.add_argument(
+        "--fusion_only",
+        action="store_true",
+        help="Whether to run stage 2 fusion training only",
+    )
+    parser.add_argument(
         "--task",
         type=str,
         help="Task to run (task1, task2, or task3)",
@@ -488,8 +495,8 @@ def main():
     parser.add_argument(
         "--model_type",
         type=str,
-        help="Model type (convnext, medvit, or vit)",
-        choices=["convnext", "medvit", "vit"],
+        help="Model type",
+        choices=["convnext", "medvit", "vit", "maxvit", "random"],
         required=True,
     )
     parser.add_argument(
@@ -563,6 +570,8 @@ def main():
 
     # Get experiment configuration
     config = CURRENT_EXPERIMENT.copy()
+    if args.task == "task3":
+        config["zsl"] = 1
 
     # Override config with command-line arguments if provided
     for key, value in vars(args).items():
@@ -593,13 +602,11 @@ def main():
 
     # Run the full pipeline
     print("\n🏃 Starting training pipeline...")
-    run_full_pipeline(config, paths)  # type: ignore
+    run_full_pipeline(config, paths, args.fusion_only)  # type: ignore
 
     print("\n🎉 Experiment completed successfully!")
     print(f"📁 Results saved to: {paths['submission_dir']}")
-    print(
-        f"🎯 Confusion matrix: {paths['submission_dir']}/conf_matrix_lr{config['lr']}.png"
-    )
+    print(f"🎯 Confusion matrix: {paths['conf_matrix_path']}")
 
 
 if __name__ == "__main__":

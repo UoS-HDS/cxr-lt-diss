@@ -33,11 +33,11 @@ CURRENT_EXPERIMENT = {
 
 def generate_experiment_name(config: Dict[str, Any]) -> str:
     """Generate experiment name from model_type, loss_type, and image_size"""
-    model_short = config["model_type"]  # medvit or convnext
-    loss = config["loss_type"]  # asl or ral
-    size = config["image_size"]  # 1024, 384, etc.
-    embedding = config["embedding"]  # pubmedbert, umlsbert, None
-    lr = config["lr"]  # Learning rate
+    model_short = config["model_type"]
+    loss = config["loss_type"]
+    size = config["image_size"]
+    embedding = config["embedding"]
+    lr = config["lr"]
 
     if embedding:
         name = f"{model_short}+{loss}+{size}+{embedding}+{lr:.0e}"
@@ -76,21 +76,21 @@ def get_experiment_paths(config: Dict[str, Any], runtime: str) -> Dict[str, Path
             f"submissions/{task}/{exp_name}/{conf_matrix_name}.svg"
         ),
         # Pseudo-labels
-        "pseudo_label_dir": Path(f".tmp/pseudolabels/{exp_name}"),
+        "pseudo_label_dir": Path(f".tmp/pseudolabels/{task}/{exp_name}"),
         "chexpert_pseudo_path": Path(
-            f".tmp/pseudolabels/{exp_name}/chexpert/train_expanded_pseudo.csv"
+            f".tmp/pseudolabels/chexpert/{task}/{exp_name}/train_expanded_pseudo.csv"
         ),
         "vinbig_pseudo_path": Path(
-            f".tmp/pseudolabels/{exp_name}/vinbig/train_expanded_pseudo.csv"
+            f".tmp/pseudolabels/vinbig/{task}/{exp_name}/train_expanded_pseudo.csv"
         ),
         "nih_pseudo_path": Path(
-            f".tmp/pseudolabels/{exp_name}/nih/train_expanded_pseudo.csv"
+            f".tmp/pseudolabels/nih/{task}/{exp_name}/train_expanded_pseudo.csv"
         ),
         "pred_df_path": Path(config["pred_df_path"]),
         "config_dir": Path(f"configs/{task}"),
         # Backup directories
-        "config_backup_dir": Path(f".tmp/configs/{exp_name}"),
-        "scripts_backup_dir": Path(f".tmp/scripts/{runtime}/{exp_name}"),
+        "config_backup_dir": Path(f".tmp/configs/{task}/{exp_name}"),
+        "scripts_backup_dir": Path(f".tmp/scripts/{runtime}/{task}/{exp_name}"),
         # Script directories
         "scripts_dir": Path(f"scripts/{runtime}/{task}"),
     }
