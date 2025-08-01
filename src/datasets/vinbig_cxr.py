@@ -24,8 +24,8 @@ class VinBigDataset(Dataset):
         label = self.df.iloc[index][self.cfg["classes"]].to_numpy().astype(np.float32)
         path = (
             Path(self.cfg["data_dir"])
-            / "vinbig-cxr-png/train"
-            / f"{self.df.iloc[index]['image_id']}.png"
+            / "vinbig-cxr-jpg/train"
+            / f"{self.df.iloc[index]['image_id']}.jpg"
         )
         resized_path = str(path.relative_to(self.cfg["data_dir"]))
         resized_path = (

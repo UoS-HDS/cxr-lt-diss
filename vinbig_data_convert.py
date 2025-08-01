@@ -7,14 +7,14 @@ from pathlib import Path
 import asyncio
 
 import pydicom
-from pydicom.pixels.processing import apply_voi_lut, apply_modality_lut
+from pydicom.pixels.processing import apply_modality_lut
 import cv2
 import numpy as np
 from tqdm.asyncio import tqdm
 
 
 VINBIG_DICOM_DIR = Path("./data/vinbig-cxr/")
-OUTPUT_PATH = Path("./data/vinbig-cxr-png/")
+OUTPUT_PATH = Path("./data/vinbig-cxr-jpg/")
 CONCURRENT_TASKS = 2000
 
 if not VINBIG_DICOM_DIR.exists():
@@ -39,17 +39,19 @@ async def process_dicom_file(dicom_file: Path, sem: asyncio.Semaphore) -> None:
 
             colour_scheme = ds.PhotometricInterpretation
             img = apply_modality_lut(ds.pixel_array, ds)
-            img = apply_voi_lut(img, ds)
 
             img_std = await standardise_img(img, colour_scheme)
+            img_std = cv2.equalizeHist(img_std)
 
             # replace vinbig-cxr directory with vinbig-cxr-png
             output_file = dicom_file.relative_to(VINBIG_DICOM_DIR)
-            output_file = OUTPUT_PATH / output_file.with_suffix(".png")
+            output_file = OUTPUT_PATH / output_file.with_suffix(".jpg")
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
             print(f"Processed {dicom_file} -> {output_file}")
-            success = cv2.imwrite(str(output_file), img_std)
+            success = cv2.imwrite(
+                str(output_file), img_std, [cv2.IMWRITE_JPEG_QUALITY, 95]
+            )
             if not success:
                 raise IOError(f"Failed to write image to {output_file}")
         except Exception as e:

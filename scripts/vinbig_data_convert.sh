@@ -12,7 +12,8 @@ cd ${project_dir}
 
 # Execute training script
 apptainer exec \
-    --home ${project_dir}:$HOME \
+    --bind "$project_dir":"$project_dir" \
+    --env UV_PROJECT_ENVIRONMENT=.venv-apptainer \
     apptainer/pytorch_25.05-py3-uv.sif \
     uv sync -q && \
     uv run vinbig_data_convert.py
