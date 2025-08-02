@@ -23,9 +23,11 @@ class NIHWriter(BasePredictionWriter):
         num_classes: int = 40,
     ):
         super().__init__(write_interval)
-        self.nih_train_df_path = nih_train_df_path
-        self.nih_pseudo_train_df_path = nih_pseudo_train_df_path
+        self.nih_train_df_path = Path(nih_train_df_path)
+        self.nih_pseudo_train_df_path = Path(nih_pseudo_train_df_path)
         self.num_classes = num_classes
+
+        self.nih_pseudo_train_df_path.parent.mkdir(parents=True, exist_ok=True)
 
     def write_on_epoch_end(self, trainer, pl_module, predictions, batch_indices):
         predictions = torch.cat(predictions, dim=0)

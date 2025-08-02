@@ -23,9 +23,11 @@ class VinBigWriter(BasePredictionWriter):
         num_classes: int,
     ):
         super().__init__(write_interval)
-        self.vinbig_train_df_path = vinbig_train_df_path
-        self.vinbig_pseudo_train_df_path = vinbig_pseudo_train_df_path
+        self.vinbig_train_df_path = Path(vinbig_train_df_path)
+        self.vinbig_pseudo_train_df_path = Path(vinbig_pseudo_train_df_path)
         self.num_classes = num_classes
+
+        self.vinbig_pseudo_train_df_path.parent.mkdir(parents=True, exist_ok=True)
 
     def write_on_epoch_end(self, trainer, pl_module, predictions, batch_indices):
         predictions = torch.cat(predictions, dim=0)

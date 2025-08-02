@@ -23,9 +23,11 @@ class ChexpertWriter(BasePredictionWriter):
         num_classes: int = 40,
     ):
         super().__init__(write_interval)
-        self.chexpert_train_df_path = chexpert_train_df_path
-        self.chexpert_pseudo_train_df_path = chexpert_pseudo_train_df_path
+        self.chexpert_train_df_path = Path(chexpert_train_df_path)
+        self.chexpert_pseudo_train_df_path = Path(chexpert_pseudo_train_df_path)
         self.num_classes = num_classes
+
+        self.chexpert_pseudo_train_df_path.parent.mkdir(parents=True, exist_ok=True)
 
     def write_on_epoch_end(self, trainer, pl_module, predictions, batch_indices):
         predictions = torch.cat(predictions, dim=0)
