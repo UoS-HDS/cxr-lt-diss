@@ -174,8 +174,8 @@ class MLDecoder(nn.Module):
         if embed_len_decoder > num_classes:
             embed_len_decoder = num_classes
 
-        if embeddings is None and zsl == 1:
-            raise ValueError("Embeddings must be provided in zero-shot learning mode")
+        # if embeddings is None and zsl == 1:
+        #     raise ValueError("Embeddings must be provided in zero-shot learning mode")
 
         # switching to 768 initial embeddings
         decoder_embedding = 768 if decoder_embedding < 0 else decoder_embedding
@@ -213,7 +213,9 @@ class MLDecoder(nn.Module):
         self.use_embeddings = embeddings is not None
 
         if self.zsl:
-            embedding_dim = embeddings.shape[-1]
+            embedding_dim = (
+                embeddings.shape[-1] if embeddings is not None else decoder_embedding
+            )
             if decoder_embedding != embedding_dim:
                 self.wordvec_proj = nn.Linear(embedding_dim, decoder_embedding)
             else:
@@ -253,15 +255,16 @@ class MLDecoder(nn.Module):
         )
 
         bs = embedding_spatial_786.shape[0]
-        if self.zsl:
-            query_embed = torch.nn.functional.relu(
-                self.wordvec_proj(self.decoder.query_embed)
-            )
+        if self.use_embeddings:
+            query_embed = self.decoder.query_embed
         else:
-            if self.use_embeddings:
-                query_embed = self.decoder.query_embed
-            else:
-                query_embed = self.decoder.query_embed.weight
+            query_embed = self.decoder.query_embed.weight
+
+        if self.zsl:
+            query_embed = torch.nn.functional.relu(self.wordvec_proj(query_embed))
+        else:
+            query_embed = query_embed
+
         # tgt = query_embed.unsqueeze(1).repeat(1, bs, 1)
         # no allocation of memory with expand
         tgt = query_embed.unsqueeze(1).expand(-1, bs, -1)

@@ -164,7 +164,9 @@ def generate_stage2_config(
     task = config["task"]
 
     # Modify for stage 2
-    base_config["trainer"]["logger"][0]["init_args"]["name"] = f"{exp_name}/{task}/stage-2"
+    base_config["trainer"]["logger"][0]["init_args"]["name"] = (
+        f"{exp_name}/{task}/stage-2"
+    )
     base_config["trainer"]["callbacks"][0]["init_args"]["dirpath"] = str(
         paths["fusion_checkpoint_dir"]
     )
@@ -217,7 +219,6 @@ def generate_stage2_pred_config(
         base_config["model"]["model_init_args"]["num_classes"] = n_classes
         base_config["data"]["datamodule_cfg"]["classes"] = classes
 
-
     return base_config
 
 
@@ -228,15 +229,12 @@ def generate_auxiliary_configs(
     base_config = generate_main_config(config, paths)
     task = config["task"]
 
-    if task == "task1":
+    if task in ["task1", "task3"]:
         auxillary_train_csv = "train_expanded.csv"
         n_classes = 40
-    elif task == "task2":
+    else:
         auxillary_train_csv = "train_expanded_26.csv"
         n_classes = 26
-    else:
-        auxillary_train_csv = "train_expanded_45.csv"
-        n_classes = -1
 
     # VinBig config
     vinbig_config = copy.deepcopy(base_config)
