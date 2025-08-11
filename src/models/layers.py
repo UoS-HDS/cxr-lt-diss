@@ -20,13 +20,10 @@ from src.models.ml_decoder import MLDecoder
 from src.utils import get_model, get_label_embeddings
 
 
-class MajorityClassClassifier(nn.Module):
-    pass
-
-
 class RandomClassifier(nn.Module):
     """Random classifier for baseline
-    uses the class proportions in the training set
+    Predicts each class with probability equal to its proportion in the training set
+    Used for multi-label classification baseline
     """
 
     def __init__(
@@ -40,16 +37,22 @@ class RandomClassifier(nn.Module):
         self.class_nums = np.array(loss_init_args["class_instance_nums"])
         self.total_images = np.array(loss_init_args["total_instance_num"])
         self.class_props = self.class_nums / self.total_images
-        self.model = nn.Linear(1, len(classes), bias=False)
-        self.model.weight = nn.Parameter(
-            torch.tensor(self.class_props, dtype=torch.float32).unsqueeze(0),
-            requires_grad=False,
-        )
+        self.num_classes = len(classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x is not used, but required for compatibility
-        # with the training loop
-        return self.model(x.unsqueeze(1)).squeeze(1)
+        # Ignore input features, just use batch size
+        batch_size = x.shape[0]
+
+        # Create tensor of class proportions and expand for the batch
+        class_probs = (
+            torch.tensor(self.class_props, dtype=torch.float16, device=x.device)
+            .unsqueeze(0)
+            .expand(batch_size, -1)
+        )
+
+        # Return class proportions directly as logits
+        # Higher proportion = higher probability of positive prediction
+        return class_probs
 
 
 class Backbone(nn.Module):

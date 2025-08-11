@@ -25,13 +25,12 @@ from src.models.layers import (
     Backbone,
     FusionBackbone,
     RandomClassifier,
-    MajorityClassClassifier,
 )
 from src.losses import get_loss
 
 
 class CxrModel(LightningModule):
-    """CNN backbone for stage 1"""
+    """Stage 1 model"""
 
     def __init__(
         self,
@@ -41,6 +40,7 @@ class CxrModel(LightningModule):
         model_type: str,
         model_init_args: dict[str, Any],
         embedding: str | None = None,
+        task: int = 1,
         zsl: int = 0,
         skip_predict_metrics: bool = True,
         conf_matrix_path: str | None = None,
@@ -60,12 +60,6 @@ class CxrModel(LightningModule):
         self.num_classes = len(classes)
         if model_type == "random":
             self.backbone = RandomClassifier(model_init_args, loss_init_args, classes)
-        elif model_type == "majority":
-            self.backbone = MajorityClassClassifier(
-                model_init_args,
-                loss_init_args,
-                classes,
-            )
         else:
             self.backbone = Backbone(
                 model_type=model_type,
@@ -302,6 +296,23 @@ class CxrModel(LightningModule):
         scheduler = get_cosine_schedule_with_warmup(optimizer, 0, 250000)
         return [optimizer], [scheduler]
 
+    def load_state_dict(self, state_dict, strict=True, assign=False):
+        # Filter out mismatched query_embed weights for different number of classes
+        # at zero-shot inference when embedding size might be different
+        filtered_state_dict = {}
+        current_state_dict = self.state_dict()
+        for key, value in state_dict.items():
+            if "query_embed" in key:
+                current_shape = current_state_dict[key].shape
+                if value.shape != current_shape:
+                    print(
+                        f"Skipping {key}: checkpoint shape {value.shape} vs model shape {current_shape}"
+                    )
+                    continue
+            filtered_state_dict[key] = value
+
+        return super().load_state_dict(filtered_state_dict, strict=False, assign=False)
+
 
 class CxrModelFusion(CxrModel):
     """ChexFusion"""
@@ -314,6 +325,7 @@ class CxrModelFusion(CxrModel):
         model_type: str,
         model_init_args: dict[str, Any],
         embedding: str | None = None,
+        task: int = 1,
         zsl: int = 0,
         skip_predict_metrics: bool = True,
         conf_matrix_path: str | None = None,
@@ -321,14 +333,15 @@ class CxrModelFusion(CxrModel):
     ):
         super().__init__(
             lr,
-            classes,
-            loss_init_args,
-            model_type,
-            model_init_args,
-            embedding,
-            zsl,
-            skip_predict_metrics,
-            conf_matrix_path,
+            classes=classes,
+            loss_init_args=loss_init_args,
+            model_type=model_type,
+            model_init_args=model_init_args,
+            embedding=embedding,
+            task=task,
+            zsl=zsl,
+            skip_predict_metrics=skip_predict_metrics,
+            conf_matrix_path=conf_matrix_path,
         )
         if model_type not in ["random"]:
             self.backbone = FusionBackbone(
