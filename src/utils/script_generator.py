@@ -24,7 +24,7 @@ project_dir="//mnt/isilon1/$USER/hds-diss/"
 
 cd "$project_dir"
 
-cmd="STAGE=1 uv run --python 3.12.9 main.py fit --config {paths["config_backup_dir"]}/config.yaml --data.datamodule_cfg.use_pseudo_label $use_pseudo"
+cmd="STAGE=1 uv run --python 3.12.9 main.py fit --config {paths["configs_dir"]}/config.yaml --data.datamodule_cfg.use_pseudo_label $use_pseudo"
 if [ -n "$ckpt_path" ]; then
     cmd="$cmd --ckpt_path $ckpt_path"
 fi
@@ -83,12 +83,12 @@ CUDA_VISIBLE_DEVICES={gpu_config["predict_cuda_devices"]} docker run --rm --gpus
     -e UV_PROJECT_ENVIRONMENT=/opt/venv/ \\
     {docker_image} \\
     bash -c "set -e; \\
-    STAGE=1 uv run --python 3.12.9 main.py predict --config {paths["config_backup_dir"]}/config.yaml \\
+    STAGE=1 uv run --python 3.12.9 main.py predict --config {paths["configs_dir"]}/config.yaml \\
       --data.datamodule_cfg.predict_pseudo_label chexpert \\
       --trainer.devices=1 --ckpt_path '$ckpt_path' && \\
-    STAGE=1 uv run --python 3.12.9 main.py predict --config {paths["config_backup_dir"]}/config-nih.yaml \\
+    STAGE=1 uv run --python 3.12.9 main.py predict --config {paths["configs_dir"]}/config-nih.yaml \\
       --trainer.devices=1 --ckpt_path '$ckpt_path' --data.datamodule_cfg.predict_pseudo_label nih && \\
-    STAGE=1 uv run --python 3.12.9 main.py predict --config {paths["config_backup_dir"]}/config-vinbig.yaml \\
+    STAGE=1 uv run --python 3.12.9 main.py predict --config {paths["configs_dir"]}/config-vinbig.yaml \\
       --trainer.devices=1 --ckpt_path '$ckpt_path' --data.datamodule_cfg.predict_pseudo_label vinbig" 2>&1 | tee logs/docker_${{TIMESTAMP}}.log
 
 # Check if docker command succeeded
@@ -119,7 +119,7 @@ if [ -z "$backbone_path" ]; then
     exit 1
 fi
 
-cmd="STAGE=2 uv run --python 3.12.9 main.py fit --config {paths["config_backup_dir"]}/config-stage-2.yaml --model.pretrained_path $backbone_path"
+cmd="STAGE=2 uv run --python 3.12.9 main.py fit --config {paths["configs_dir"]}/config-stage-2.yaml --model.pretrained_path $backbone_path"
 
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 # Execute training script
@@ -168,7 +168,7 @@ if [ -z "$ckpt_path" ]; then
     exit 1
 fi
 
-cmd="STAGE=2 uv run --python 3.12.9 main.py predict --config {paths["config_backup_dir"]}/config-stage-2-pred.yaml --ckpt_path $ckpt_path"
+cmd="STAGE=2 uv run --python 3.12.9 main.py predict --config {paths["configs_dir"]}/config-stage-2-pred.yaml --ckpt_path $ckpt_path"
 
 # Execute training script
 CUDA_VISIBLE_DEVICES={gpu_config["predict_cuda_devices"]} docker run --rm --gpus '"device={gpu_config["predict_cuda_devices"]}"' --ipc=host \\
@@ -195,7 +195,7 @@ def write_script_files(config: Dict[str, Any], paths: Dict[str, Path]) -> None:
     """Generate and write all Docker script files"""
 
     # Create scripts directory
-    scripts_dir = paths["scripts_backup_dir"]
+    scripts_dir = paths["scripts_dir"]
     scripts_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate all scripts

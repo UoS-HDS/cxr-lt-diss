@@ -38,7 +38,7 @@ def _generate_train_backbone_script(
     slurm_header = _get_slurm_header(job_name, gpu_count, mem=mem, partition=partition)
     project_dir = config["project_dir"]
     apptainer_image = config["apptainer_image"]
-    config_path = paths["config_backup_dir"] / "config.yaml"
+    config_path = paths["configs_dir"] / "config.yaml"
 
     return f"""{slurm_header}
 set -e
@@ -95,9 +95,9 @@ def _generate_predict_pseudo_script(
     slurm_header = _get_slurm_header(job_name, gpu_count, mem=mem, partition=partition)
     project_dir = config["project_dir"]
     apptainer_image = config["apptainer_image"]
-    config_path = paths["config_backup_dir"] / "config.yaml"
-    nih_config_path = paths["config_backup_dir"] / "config-nih.yaml"
-    vinbig_config_path = paths["config_backup_dir"] / "config-vinbig.yaml"
+    config_path = paths["configs_dir"] / "config.yaml"
+    nih_config_path = paths["configs_dir"] / "config-nih.yaml"
+    vinbig_config_path = paths["configs_dir"] / "config-vinbig.yaml"
 
     return f"""{slurm_header}
 set -e
@@ -150,7 +150,7 @@ def _generate_train_fusion_script(
     slurm_header = _get_slurm_header(job_name, gpu_count, mem=mem, partition=partition)
     project_dir = config["project_dir"]
     apptainer_image = config["apptainer_image"]
-    config_path = paths["config_backup_dir"] / "config-stage-2.yaml"
+    config_path = paths["configs_dir"] / "config-stage-2.yaml"
 
     return f"""{slurm_header}
 set -e
@@ -205,7 +205,7 @@ def _generate_predict_final_script(
     slurm_header = _get_slurm_header(job_name, gpu_count, mem=mem, partition=partition)
     project_dir = config["project_dir"]
     apptainer_image = config["apptainer_image"]
-    config_path = paths["config_backup_dir"] / "config-stage-2-pred.yaml"
+    config_path = paths["configs_dir"] / "config-stage-2-pred.yaml"
     if config["predict_type"] == "dev":
         res_file = "results.txt"
     else:
@@ -251,8 +251,8 @@ def write_apptainer_script_files(
     paths: Dict[str, Path],
 ) -> None:
     """Writes all necessary Apptainer bash scripts for an experiment."""
-    script_dir = paths["scripts_backup_dir"]
-    script_dir.mkdir(parents=True, exist_ok=True)
+    scripts_dir = paths["scripts_dir"]
+    scripts_dir.mkdir(parents=True, exist_ok=True)
 
     scripts_to_generate = {
         "train_backbone.sh": _generate_train_backbone_script(config, paths),
@@ -262,9 +262,9 @@ def write_apptainer_script_files(
     }
 
     for filename, script_content in scripts_to_generate.items():
-        with open(script_dir / filename, "w") as f:
+        with open(scripts_dir / filename, "w") as f:
             f.write(script_content)
         # Make script executable
-        (script_dir / filename).chmod(0o755)
+        (scripts_dir / filename).chmod(0o755)
 
-    print(f"✅ Apptainer scripts generated in {script_dir}")
+    print(f"✅ Apptainer scripts generated in {scripts_dir}")

@@ -11,10 +11,8 @@ import copy
 from src.utils.class_counts import (
     CLASSES_26,
     CLASSES_40,
-    CLASSES_45,
     INSTANCE_NUMS_26,
     INSTANCE_NUMS_40,
-    INSTANCE_NUMS_45,
     TOTAL_IMAGES,
 )
 
@@ -51,7 +49,7 @@ def generate_main_config(
                 {
                     "class_path": "lightning.pytorch.loggers.TensorBoardLogger",
                     "init_args": {
-                        "save_dir": str(paths["tb_log_dir"]),
+                        "save_dir": f"{str(paths['tb_log_dir'])}/iter_{config['iter']}",  # TODO: REMOVE iter
                         "name": f"{exp_name}/{task}/stage-1",
                     },
                 }
@@ -60,7 +58,7 @@ def generate_main_config(
                 {
                     "class_path": "lightning.pytorch.callbacks.ModelCheckpoint",
                     "init_args": {
-                        "dirpath": str(paths["checkpoint_dir"]),
+                        "dirpath": f"{str(paths['checkpoint_dir'])}/iter_{config['iter']}",  # TODO: REMOVE iter
                         "filename": "{epoch:02d}-{val_loss:.4f}-{val_ap:.5f}",
                         "save_top_k": 1,
                         "save_last": True,
@@ -284,7 +282,7 @@ def write_config_files(config: Dict[str, Any], paths: Dict[str, Path]) -> None:
     """Generate and write all configuration files"""
 
     # Create config directory
-    config_dir = Path(paths["config_backup_dir"])
+    config_dir = Path(paths["configs_dir"])
     config_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate all configs

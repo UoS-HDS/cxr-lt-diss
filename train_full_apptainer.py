@@ -323,7 +323,7 @@ def run_full_pipeline(
     """Run the complete training pipeline"""
 
     # Use generated scripts
-    SCRIPTS_DIR = paths["scripts_backup_dir"]
+    SCRIPTS_DIR = paths["scripts_dir"]
 
     # Define script paths
     train_script = SCRIPTS_DIR / "train_backbone.sh"
@@ -373,6 +373,8 @@ def run_full_pipeline(
                 ckpt,
                 use_pseudo=1,
             )
+            config["iter"] = idx
+            setup_experiment(config, paths)
 
         if not fusion_only:
             ckpt = get_best_ckpt(paths["checkpoint_dir"])
@@ -440,7 +442,7 @@ def run_predict_only(config: Dict[str, Any], paths: Dict[str, Path]):
     print("\n🏃 Starting prediction pipeline...")
 
     # Use generated scripts
-    SCRIPTS_DIR = paths["scripts_backup_dir"]
+    SCRIPTS_DIR = paths["scripts_dir"]
 
     predict_script = SCRIPTS_DIR / "predict_final.sh"
 
@@ -449,7 +451,14 @@ def run_predict_only(config: Dict[str, Any], paths: Dict[str, Path]):
 
     print(f"Using script: {predict_script}")
 
-    if config["model_type"] not in ["random"]:
+    if config["model_type"] in ["random"]:
+        run_job(
+            predict_script,
+            "Predicting final labels with random model",
+            None,
+            predict=True,
+        )
+    else:
         fusion_ckpt = get_best_ckpt(paths["fusion_checkpoint_dir"])
         print(f"Using checkpoint for prediction: {fusion_ckpt}")
 
@@ -457,13 +466,6 @@ def run_predict_only(config: Dict[str, Any], paths: Dict[str, Path]):
             predict_script,
             "Predicting final labels",
             fusion_ckpt,
-            predict=True,
-        )
-    else:
-        run_job(
-            predict_script,
-            "Predicting final labels with random model",
-            None,
             predict=True,
         )
 
@@ -520,12 +522,18 @@ def main():
         required=True,
     )
     parser.add_argument(
-        "--image_size", type=int, help="Image size for training", required=True
+        "--image_size",
+        type=int,
+        help="Image size for training and prediction",
+        required=True,
     )
     parser.add_argument("--lr", type=float, help="Learning rate", required=True)
     parser.add_argument("--batch_size", type=int, help="Batch size", required=True)
     parser.add_argument(
-        "--gpu_count", type=int, help="Number of GPUs for training", required=True
+        "--gpu_count",
+        type=int,
+        help="Number of GPUs for training",
+        required=True,
     )
     parser.add_argument("--mem", type=str, help="Memory for SLURM jobs", default="48G")
     parser.add_argument("--max_epochs", type=int, help="Maximum number of epochs")
@@ -533,6 +541,7 @@ def main():
         "--n_iterations",
         type=int,
         help="Number of noisy student iterations",
+        default=3,
     )
     parser.add_argument(
         "--predict_type",
@@ -544,8 +553,8 @@ def main():
     parser.add_argument(
         "--project_dir",
         type=str,
-        help="Project directory path",
-        default="/mnt/isilon1/na200/hds-diss",
+        help="Project root directory",
+        required=True,
     )
     parser.add_argument(
         "--apptainer_image",
@@ -557,7 +566,7 @@ def main():
         "--partition",
         type=str,
         help="SLURM partition to use",
-        default="gpu",
+        required=True,
     )
     parser.add_argument(
         "--time",

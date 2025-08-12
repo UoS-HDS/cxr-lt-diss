@@ -16,10 +16,10 @@ def create_experiment_directories(paths: Dict[str, Path]) -> None:
         paths["pseudo_label_dir"] / "chexpert",
         paths["pseudo_label_dir"] / "vinbig",
         paths["pseudo_label_dir"] / "nih",
-        paths["config_backup_dir"],
-        paths["scripts_backup_dir"],
+        paths["configs_dir"],
+        paths["scripts_dir"],
         paths["tb_log_dir"],
-        Path("logs"),  # For Docker logs
+        Path("logs"),
     ]
 
     for directory in directories_to_create:

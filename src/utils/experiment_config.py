@@ -10,8 +10,8 @@ from typing import Dict, Any
 # EDIT THIS SECTION TO CONFIGURE YOUR EXPERIMENT
 CURRENT_EXPERIMENT = {
     "task": "task1",  # task1, task2, or task3
-    "model_type": "medvit",  # convnext, medvit, vit
-    "model_name": "medvit",  # medvit, convnext_small.fb_in22k_ft_in1k_384
+    "model_type": "convnext",  # convnext, medvit, vit
+    "model_name": "convnext_small.fb_in22k_ft_in1k_384",  # medvit, convnext_small.fb_in22k_ft_in1k_384 (from timm)
     "embedding": None,  # pubmedbert, umlsbert, None
     "zsl": 0,  # 0 for no ZSL, 1 for ZSL
     "loss_type": "asl",  # asl, ral
@@ -24,6 +24,7 @@ CURRENT_EXPERIMENT = {
     "mem": "48G",  # Memory for training
     "max_epochs": 150,
     "n_iterations": 3,  # Number of noisy student iterations
+    "iter": 0,  # Current NST iteration (0, 1, 2...n-1, auto-passed during runs)
     "predict_type": "dev",  # dev or test, determines which dataset to use for prediction
     "project_dir": "/mnt/isilon1/na200/hds-diss",
     "apptainer_image": "pytorch_25.05-py3-uv",
@@ -87,12 +88,8 @@ def get_experiment_paths(config: Dict[str, Any], runtime: str) -> Dict[str, Path
             f".tmp/pseudolabels/nih/{task}/{exp_name}/train_expanded_pseudo.csv"
         ),
         "pred_df_path": Path(config["pred_df_path"]),
-        "config_dir": Path(f"configs/{task}"),
-        # Backup directories
-        "config_backup_dir": Path(f".tmp/configs/{task}/{exp_name}"),
-        "scripts_backup_dir": Path(f".tmp/scripts/{runtime}/{task}/{exp_name}"),
-        # Script directories
-        "scripts_dir": Path(f"scripts/{runtime}/{task}"),
+        "configs_dir": Path(f".tmp/configs/{task}/{exp_name}"),
+        "scripts_dir": Path(f".tmp/scripts/{runtime}/{task}/{exp_name}"),
     }
 
 
