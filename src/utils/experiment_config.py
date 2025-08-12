@@ -93,6 +93,28 @@ def get_experiment_paths(config: Dict[str, Any], runtime: str) -> Dict[str, Path
     }
 
 
+def create_experiment_directories(paths: Dict[str, Path]) -> None:
+    """Create all necessary directories for an experiment"""
+
+    directories_to_create = [
+        paths["checkpoint_dir"],
+        paths["fusion_checkpoint_dir"],
+        paths["submission_dir"],
+        paths["pseudo_label_dir"] / "chexpert",
+        paths["pseudo_label_dir"] / "vinbig",
+        paths["pseudo_label_dir"] / "nih",
+        paths["configs_dir"],
+        paths["scripts_dir"],
+        paths["tb_log_dir"],
+        Path("logs"),
+    ]
+
+    for directory in directories_to_create:
+        directory.mkdir(parents=True, exist_ok=True)
+
+    print("✅ Created experiment directories")
+
+
 def get_gpu_config(config: Dict[str, Any]) -> Dict[str, str]:
     """Generate GPU configuration strings for Docker"""
     train_gpus = config["train_gpus"]
@@ -106,39 +128,3 @@ def get_gpu_config(config: Dict[str, Any]) -> Dict[str, str]:
         "predict_cuda_devices": predict_gpu_str,
         "predict_gpu_count": "1",
     }
-
-
-def validate_experiment_config(config: Dict[str, Any]) -> None:
-    """Validate experiment configuration"""
-    required_keys = [
-        "task",
-        "model_type",
-        "model_name",
-        "loss_type",
-        "image_size",
-        "lr",
-        "batch_size",
-        "train_gpus",
-        "predict_gpu",
-    ]
-
-    for key in required_keys:
-        if key not in config:
-            raise ValueError(f"Missing required config key: {key}")
-
-    if config["model_type"] not in ["convnext", "medvit", "vit", "maxvit"]:
-        raise ValueError(f"Invalid model_type: {config['model_type']}")
-
-    if config["loss_type"] not in ["asl", "ral"]:
-        raise ValueError(f"Invalid loss_type: {config['loss_type']}")
-
-    if config["task"] not in ["task1", "task2", "task3"]:
-        raise ValueError(f"Invalid task: {config['task']}")
-
-    if not isinstance(config["train_gpus"], list) or len(config["train_gpus"]) == 0:
-        raise ValueError("train_gpus must be a non-empty list")
-
-    if config["predict_gpu"] not in config["train_gpus"]:
-        print(
-            f"Warning: predict_gpu {config['predict_gpu']} not in train_gpus {config['train_gpus']}"
-        )
