@@ -49,7 +49,8 @@ def generate_main_config(
                 {
                     "class_path": "lightning.pytorch.loggers.TensorBoardLogger",
                     "init_args": {
-                        "save_dir": f"{str(paths['tb_log_dir'])}/iter_{config['iter']}",  # TODO: REMOVE iter
+                        # "save_dir": f"{str(paths['tb_log_dir'])}/iter_{config['iter']}",  # TODO: REMOVE iter
+                        "save_dir": str(paths['tb_log_dir']),
                         "name": f"{exp_name}/{task}/stage-1",
                     },
                 }
@@ -58,7 +59,8 @@ def generate_main_config(
                 {
                     "class_path": "lightning.pytorch.callbacks.ModelCheckpoint",
                     "init_args": {
-                        "dirpath": f"{str(paths['checkpoint_dir'])}/iter_{config['iter']}",  # TODO: REMOVE iter
+                        # "dirpath": f"{str(paths['checkpoint_dir'])}/iter_{config['iter']}",  # TODO: REMOVE iter
+                        "dirpath": str(paths['checkpoint_dir']),
                         "filename": "{epoch:02d}-{val_loss:.4f}-{val_ap:.5f}",
                         "save_top_k": 1,
                         "save_last": True,

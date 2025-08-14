@@ -133,8 +133,10 @@ def run_full_pipeline(
                 ckpt,
                 use_pseudo=1,
             )
-            config["iter"] = idx
-            setup_experiment(config, paths, runtime, valid_func)
+            # THESE WERE COMMENTED OUT AS THEY ARE FIXES FOR THE
+            # CHECKPOINT LOADING FLAW IDENTIFIED IN THE METHODOLOGY
+            # config["iter"] = idx
+            # setup_experiment(config, paths, runtime, valid_func)
 
         if not fusion_only:
             ckpt = get_best_ckpt(paths["checkpoint_dir"])
